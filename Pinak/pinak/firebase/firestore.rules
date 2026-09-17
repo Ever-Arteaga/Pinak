@@ -1,0 +1,77 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // ---------------------------------------------------------
+    // USERS - perfil del usuario / negocio
+    // ---------------------------------------------------------
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['email', 'businessName', 'plan', 'createdAt'])
+        && request.resource.data.plan == 'emprendedor';
+      allow update: if isOwner(userId)
+        && (!('plan' in request.resource.data.diff(resource.data).affectedKeys())
+            || request.resource.data.plan == resource.data.plan);
+      allow delete: if false;
+
+      // -------------------------------------------------------
+      // TRANSACTIONS (ingresos / egresos)
+      // -------------------------------------------------------
+      match /transactions/{transactionId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['type', 'amount', 'category', 'method', 'date'])
+          && request.resource.data.type in ['ingreso', 'egreso']
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0;
+        allow update: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
+
+      // -------------------------------------------------------
+      // CATEGORIES
+      // -------------------------------------------------------
+      match /categories/{categoryId} {
+        allow read: if isOwner(userId);
+        allow create, update, delete: if isOwner(userId);
+      }
+
+      // -------------------------------------------------------
+      // RECEIVABLES (fiados / cuentas por cobrar)
+      // -------------------------------------------------------
+      match /receivables/{receivableId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasAll(['clientName', 'amount', 'status'])
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0
+          && request.resource.data.status == 'pendiente';
+        allow update: if isOwner(userId)
+          && request.resource.data.status in ['pendiente', 'pagado', 'vencido'];
+        allow delete: if isOwner(userId);
+      }
+
+      // -------------------------------------------------------
+      // USAGE - contador de uso mensual (límites del plan gratuito)
+      // -------------------------------------------------------
+      match /usage/{monthId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,129 @@
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+} from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { Linking } from "react-native";
+import { db } from "./firebase";
+import type { Receivable } from "../types/pinak";
+
+interface NewReceivableInput {
+  clientName: string;
+  clientPhone?: string;
+  amount: number;
+  dueDate?: Date;
+}
+
+export async function addReceivable(userId: string, input: NewReceivableInput) {
+  const ref = collection(db, "users", userId, "receivables");
+  await addDoc(ref, {
+    clientName: input.clientName,
+    clientPhone: input.clientPhone ?? "",
+    amount: input.amount,
+    status: "pendiente",
+    dueDate: input.dueDate ? Timestamp.fromDate(input.dueDate) : null,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function markReceivableAsPaid(userId: string, receivableId: string) {
+  await updateDoc(doc(db, "users", userId, "receivables", receivableId), {
+    status: "pagado",
+  });
+}
+
+export async function updateReceivable(
+  userId: string,
+  receivableId: string,
+  input: NewReceivableInput
+) {
+  await updateDoc(doc(db, "users", userId, "receivables", receivableId), {
+    clientName: input.clientName,
+    clientPhone: input.clientPhone ?? "",
+    amount: input.amount,
+    ...(input.dueDate ? { dueDate: Timestamp.fromDate(input.dueDate) } : {}),
+  });
+}
+
+export async function deleteReceivable(userId: string, receivableId: string) {
+  await deleteDoc(doc(db, "users", userId, "receivables", receivableId));
+}
+
+export function useReceivables(userId: string | undefined) {
+  const [receivables, setReceivables] = useState<Receivable[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!userId) {
+      setReceivables([]);
+      setLoading(false);
+      return;
+    }
+
+    const q = query(
+      collection(db, "users", userId, "receivables"),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const items = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          clientName: data.clientName,
+          clientPhone: data.clientPhone,
+          amount: data.amount,
+          status: data.status,
+          dueDate: data.dueDate?.toDate?.() ?? undefined,
+          createdAt: data.createdAt?.toDate?.() ?? new Date(),
+        } as Receivable;
+      });
+      setReceivables(items);
+      setLoading(false);
+    });
+
+    return unsubscribe;
+  }, [userId]);
+
+  return { receivables, loading };
+}
+
+const currency = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+});
+
+function buildMessage(businessName: string, receivable: Receivable): string {
+  const monto = currency.format(receivable.amount);
+  return (
+    `¡Hola ${receivable.clientName}! 👋 Te escribo de ${businessName} para recordarte ` +
+    `tu saldo pendiente de ${monto}. Puedes pagarlo fácilmente por Nequi o Daviplata ` +
+    `cuando gustes. ¡Gracias por tu confianza! 🙌`
+  );
+}
+
+function normalizePhoneNumber(raw?: string): string | null {
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("57")) return digits;
+  if (digits.length === 10) return `57${digits}`;
+  return digits;
+}
+
+export async function openWhatsAppCollection(businessName: string, receivable: Receivable) {
+  const mensaje = buildMessage(businessName, receivable);
+  const phone = normalizePhoneNumber(receivable.clientPhone);
+  const encoded = encodeURIComponent(mensaje);
+  const url = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+  await Linking.openURL(url);
+}

@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+:root {
+  /* Marca PINAK — derivado del logo (P azul marino + flecha verde de crecimiento) */
+  --pinak-navy-900: #10123a;
+  --pinak-navy-800: #171a4d;
+  --pinak-navy-700: #23276a;
+  --pinak-green-600: #4c8c6b;
+  --pinak-green-500: #5fa17e;
+  --pinak-green-100: #dcece2;
+  --pinak-cream: #f7f7f4;
+  --pinak-ink: #1b1c29;
+  --pinak-ink-soft: #5c5f72;
+  --pinak-line: #e4e3dd;
+  --pinak-danger: #b3503f;
+
+  --background: var(--pinak-cream);
+  --foreground: var(--pinak-ink);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-navy-900: var(--pinak-navy-900);
+  --color-navy-800: var(--pinak-navy-800);
+  --color-navy-700: var(--pinak-navy-700);
+  --color-green-600: var(--pinak-green-600);
+  --color-green-500: var(--pinak-green-500);
+  --color-green-100: var(--pinak-green-100);
+  --color-cream: var(--pinak-cream);
+  --color-ink: var(--pinak-ink);
+  --color-ink-soft: var(--pinak-ink-soft);
+  --color-line: var(--pinak-line);
+  --color-danger: var(--pinak-danger);
+  --font-display: var(--font-space-grotesk);
+  --font-sans: var(--font-inter);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+}
