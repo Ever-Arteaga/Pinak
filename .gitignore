@@ -1,0 +1,31 @@
+# Dependencias
+node_modules/
+**/node_modules/
+
+# Builds
+.next/
+.expo/
+dist/
+build/
+functions/lib/
+web/out/
+
+# Credenciales y variables de entorno — NUNCA subir esto
+.env
+.env.local
+.env*.local
+web/.env.local
+
+# Credenciales nativas de Firebase (móvil) — contienen API keys
+mobile/google-services.json
+mobile/GoogleService-Info.plist
+mobile/app.json
+
+# Sistema
+.DS_Store
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
