@@ -70,9 +70,9 @@ service cloud.firestore {
       }
 
       // -------------------------------------------------------
-      // PAYMENTS - historial de pagos de Wompi
+      // PAYMENTS - historial de pagos de Bold
       // Solo lectura desde el cliente. La escritura la hace exclusivamente
-      // el webhook de Wompi (Cloud Function con Admin SDK, que ignora estas
+      // el webhook de Bold (Cloud Function con Admin SDK, que ignora estas
       // reglas), nunca el usuario directamente.
       // -------------------------------------------------------
       match /payments/{paymentId} {

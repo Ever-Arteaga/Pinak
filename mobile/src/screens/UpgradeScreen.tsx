@@ -2,7 +2,8 @@ import { useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAuthUser } from "../lib/auth";
 import { useUserProfile } from "../lib/userProfile";
-import { startPlanUpgrade } from "../lib/payments";
+import { createBoldCheckout, type BoldCheckoutData } from "../lib/payments";
+import { BoldCheckoutModal } from "../components/BoldCheckoutModal";
 import { AppHeader } from "../components/AppHeader";
 import { colors } from "../theme";
 import { PLAN_LIMITS, type Plan } from "../types/pinak";
@@ -40,6 +41,7 @@ export default function UpgradeScreen({ onBack }: { onBack: () => void }) {
   const { profile } = useUserProfile(user?.uid);
   const [loadingPlan, setLoadingPlan] = useState<"pro" | "premium" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [checkoutData, setCheckoutData] = useState<BoldCheckoutData | null>(null);
 
   if (!user) return null;
 
@@ -47,7 +49,8 @@ export default function UpgradeScreen({ onBack }: { onBack: () => void }) {
     setError(null);
     setLoadingPlan(plan);
     try {
-      await startPlanUpgrade(plan);
+      const data = await createBoldCheckout(plan);
+      setCheckoutData(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar el pago.");
     } finally {
@@ -118,10 +121,16 @@ export default function UpgradeScreen({ onBack }: { onBack: () => void }) {
         })}
 
         <Text style={styles.footnote}>
-          Pagas de forma segura con Wompi (Nequi, PSE, tarjeta). Tu plan se
+          Pagas de forma segura con Bold (Nequi, tarjeta, PSE). Tu plan se
           renueva mes a mes — te avisaremos antes de que venza.
         </Text>
       </ScrollView>
+
+      <BoldCheckoutModal
+        visible={checkoutData !== null}
+        checkoutData={checkoutData}
+        onClose={() => setCheckoutData(null)}
+      />
     </View>
   );
 }

@@ -12,7 +12,7 @@ export default function ProcessingPaymentPage() {
   const { profile } = useUserProfile(user?.uid);
   const [waitedTooLong, setWaitedTooLong] = useState(false);
 
-  // El webhook de Wompi actualiza el plan en Firestore en segundo plano;
+  // El webhook de Bold actualiza el plan en Firestore en segundo plano;
   // useUserProfile ya escucha ese documento en tiempo real, así que en
   // cuanto cambie el plan, redirigimos solos al dashboard.
   useEffect(() => {

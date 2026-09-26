@@ -178,4 +178,4 @@ export const parseTransactionText = onCall(
   }
 );
 
-export { createUpgradeCheckout, wompiWebhook, downgradeExpiredPlans } from "./payments";
+export { createBoldCheckout, boldWebhook, downgradeExpiredPlans } from "./payments";

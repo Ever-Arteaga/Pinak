@@ -130,7 +130,7 @@ export default function UpgradePage() {
         </div>
 
         <p className="mt-6 text-center text-xs text-ink-soft">
-          Pagas de forma segura con Wompi (Nequi, PSE, tarjeta). Tu plan se
+          Pagas de forma segura con Bold (Nequi, tarjeta, PSE). Tu plan se
           renueva mes a mes — te avisaremos antes de que venza.
         </p>
       </div>

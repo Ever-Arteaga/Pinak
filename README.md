@@ -118,53 +118,68 @@ firebase deploy --only functions
 La primera vez puede pedirte activar el plan **Blaze** de Firebase — sigue
 siendo $0 mientras no superes las cuotas gratis.
 
-### Cloud Functions de pago (Wompi) — upgrade de plan
+### Cloud Functions de pago (Bold) — upgrade de plan
 
 Implementa el flujo real de cobro para pasar de Emprendedor a Pro/Premium,
-usando [Wompi](https://wompi.co) (la pasarela más usada en Colombia — Nequi,
-PSE, tarjetas, operada por Bancolombia).
+usando [Bold](https://bold.co) (pasarela colombiana — Nequi, PSE, tarjetas).
 
 **Cómo funciona:**
-1. El usuario toca "Actualizar a Pro/Premium" → `createUpgradeCheckout`
-   genera una URL de checkout de Wompi firmada (monto + referencia
-   codificando `uid` y plan).
-2. El usuario paga en la página de Wompi.
-3. Wompi notifica el resultado al endpoint `wompiWebhook`, que verifica la
-   firma del evento y, si fue aprobado, actualiza `users/{uid}.plan` con
-   permisos de administrador (el cliente nunca puede cambiar su propio plan
-   — ver `firebase/firestore.rules`).
-4. `downgradeExpiredPlans` corre una vez al día y regresa a Emprendedor a
+1. El usuario toca "Actualizar a Pro/Premium" → `createBoldCheckout` genera
+   los datos firmados del checkout (monto, `orderId` único, firma de
+   integridad) y guarda una "intención de compra" en Firestore
+   (`checkoutIntents/{orderId}`) con el `uid` y el plan.
+2. **Web**: se carga el script de Bold y se abre el checkout con el
+   constructor `new BoldCheckout({...}).open()` (mantiene nuestro propio
+   diseño de botón). **Móvil**: como Bold funciona con un script JS —no con
+   una URL directa—, se abre dentro de un `WebView` (`react-native-webview`)
+   que carga una página mínima con ese mismo script.
+3. El usuario paga en la interfaz de Bold.
+4. Bold notifica el resultado al endpoint `boldWebhook`, que verifica la
+   firma HMAC del evento, busca la intención de compra por `orderId`, valida
+   que el monto pagado coincida, y actualiza `users/{uid}.plan` con permisos
+   de administrador (el cliente nunca puede cambiar su propio plan — ver
+   `firebase/firestore.rules`).
+5. `downgradeExpiredPlans` corre una vez al día y regresa a Emprendedor a
    quien no renovó su plan pago (vencimiento a los 30 días).
 
 **Configuración:**
 
-1. Crea una cuenta en [comercios.wompi.co](https://comercios.wompi.co).
-   Para producción piden NIT/Cámara de Comercio; mientras tanto, usa las
-   **llaves de sandbox** (gratis, sin verificación, con tarjetas de prueba)
-   para desarrollar y probar todo el flujo.
-2. En el panel de Wompi, copia: la **llave pública** (`pub_test_...` o
-   `pub_prod_...`), el **secreto de integridad** ("Integrity" — firma los
-   checkouts) y el **secreto de eventos** ("Events" — firma los webhooks).
-3. Guárdalos como secretos de Firebase:
+1. Crea una cuenta en el [Panel de Comercios de Bold](https://panel.bold.co).
+   Para producción piden NIT/Cámara de Comercio; mientras tanto, usa el
+   **modo pruebas** (sandbox) para desarrollar y probar todo el flujo.
+2. En el panel, sección "Botón de pagos" → "Llaves de integración", copia:
+   la **llave de identidad** (pública) y la **llave secreta** (privada —
+   firma los checkouts y los webhooks).
+3. Guárdalas como secretos de Firebase:
    ```
    cd functions
-   firebase functions:secrets:set WOMPI_PUBLIC_KEY
-   firebase functions:secrets:set WOMPI_INTEGRITY_SECRET
-   firebase functions:secrets:set WOMPI_EVENTS_SECRET
+   firebase functions:secrets:set BOLD_IDENTITY_KEY
+   firebase functions:secrets:set BOLD_SECRET_KEY
    ```
-4. Despliega: `firebase deploy --only functions`
-5. En el panel de Wompi (Eventos/Webhooks), registra la URL del webhook.
-   Firebase te la da después del deploy — se ve algo así:
+4. Despliega las funciones: `firebase deploy --only functions`
+5. Publica la web en Firebase Hosting (necesario porque Bold exige que la
+   URL de redirección sea `https://`, y el checkout en móvil usa esa misma
+   URL para saber cuándo cerrarse):
    ```
-   https://us-central1-pinak-cd2e4.cloudfunctions.net/wompiWebhook
+   cd web && npm run build && cd ..
+   firebase deploy --only hosting
+   ```
+   Esto la publica en `https://pinak-cd2e4.web.app` (o el dominio que
+   configures). Si usas un dominio distinto, actualiza la constante
+   `BOLD_REDIRECT_URL` en `mobile/src/lib/payments.ts`.
+6. En el panel de Bold (Webhooks), registra la URL que te dio Firebase tras
+   el deploy de functions:
+   ```
+   https://us-central1-pinak-cd2e4.cloudfunctions.net/boldWebhook
    ```
 
 **Roadmap pendiente** (no implementado aún):
 - Cobro automático recurrente (hoy la renovación es manual cada 30 días —
   automatizarla requiere tokenizar el método de pago, una integración más
-  avanzada con Wompi)
+  avanzada con Bold)
 - Recordatorio antes del vencimiento del plan
 - Historial de facturación visible para el usuario dentro de la app
+
 ## Notas técnicas importantes
 
 - **Versión de Expo**: fijada a SDK 54 para que coincida con Expo Go. Si

@@ -1,37 +1,80 @@
 import { httpsCallable, type FunctionsError } from "firebase/functions";
-import * as WebBrowser from "expo-web-browser";
-import * as Linking from "expo-linking";
 import { functions } from "./firebase";
 
-type PayablePlan = "pro" | "premium";
+export type PayablePlan = "pro" | "premium";
 
-interface CheckoutResult {
-  checkoutUrl: string;
-  reference: string;
+export interface BoldCheckoutData {
+  identityKey: string;
+  orderId: string;
+  amount: string;
+  currency: string;
+  integritySignature: string;
+  redirectionUrl: string;
+  description: string;
 }
 
-/**
- * Pide a la Cloud Function un checkout de Wompi para actualizar de plan,
- * y lo abre en el navegador del dispositivo. El usuario vuelve a la app
- * sola (deep link "pinak://upgrade-success") cuando termina de pagar;
- * la confirmación real del plan llega poco después vía el webhook de Wompi,
- * que useUserProfile detecta en tiempo real.
- */
-export async function startPlanUpgrade(plan: PayablePlan) {
-  const callable = httpsCallable<
-    { plan: PayablePlan; redirectUrl: string },
-    CheckoutResult
-  >(functions, "createUpgradeCheckout");
+// URL pública de Firebase Hosting donde se publica la carpeta web/out
+// (ver README: "firebase deploy --only hosting"). Bold exige que la URL de
+// redirección empiece con https://, por eso no se puede usar un esquema
+// personalizado (pinak://) aquí — el WebView detecta esta URL para saber
+// cuándo cerrar y devolver el control a la app.
+export const BOLD_REDIRECT_URL = "https://pinak-cd2e4.web.app/upgrade/procesando/";
 
-  const redirectUrl = Linking.createURL("upgrade-success");
+/** Pide a la Cloud Function los datos firmados del checkout de Bold. */
+export async function createBoldCheckout(plan: PayablePlan): Promise<BoldCheckoutData> {
+  const callable = httpsCallable<
+    { plan: PayablePlan; redirectionUrl: string },
+    BoldCheckoutData
+  >(functions, "createBoldCheckout");
 
   try {
-    const result = await callable({ plan, redirectUrl });
-    await WebBrowser.openBrowserAsync(result.data.checkoutUrl);
+    const result = await callable({ plan, redirectionUrl: BOLD_REDIRECT_URL });
+    return result.data;
   } catch (err) {
     const fnError = err as FunctionsError;
     throw new Error(traducirErrorPago(fnError));
   }
+}
+
+/**
+ * HTML mínimo que carga el script de Bold y abre el checkout automáticamente
+ * al terminar de cargar — se usa dentro de un WebView, sin necesidad de un
+ * botón intermedio (el "clic" ya ocurrió en la pantalla nativa de la app).
+ */
+export function buildBoldCheckoutHtml(data: BoldCheckoutData): string {
+  return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { margin:0; background:#f7f7f4; font-family:-apple-system,Helvetica,Arial,sans-serif;
+             display:flex; align-items:center; justify-content:center; height:100vh; }
+      p { color:#5c5f72; font-size:14px; }
+    </style>
+  </head>
+  <body>
+    <p>Cargando pago seguro...</p>
+    <script src="https://checkout.bold.co/library/boldPaymentButton.js"></script>
+    <script>
+      window.addEventListener("load", function () {
+        try {
+          var checkout = new BoldCheckout({
+            orderId: ${JSON.stringify(data.orderId)},
+            currency: ${JSON.stringify(data.currency)},
+            amount: ${JSON.stringify(data.amount)},
+            apiKey: ${JSON.stringify(data.identityKey)},
+            integritySignature: ${JSON.stringify(data.integritySignature)},
+            description: ${JSON.stringify(data.description)},
+            redirectionUrl: ${JSON.stringify(data.redirectionUrl)}
+          });
+          checkout.open();
+        } catch (e) {
+          document.body.innerHTML = "<p>No se pudo abrir el pago. Cierra e intenta de nuevo.</p>";
+        }
+      });
+    </script>
+  </body>
+</html>`;
 }
 
 function traducirErrorPago(err: FunctionsError): string {

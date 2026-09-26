@@ -10,18 +10,19 @@ if (admin.apps.length === 0) {
 }
 const db = admin.firestore();
 
-// Llaves de Wompi guardadas como secretos de Firebase — nunca en el código ni el cliente.
+// Llaves de Bold guardadas como secretos de Firebase — nunca en el código ni el cliente.
 // Se configuran una sola vez con:
-//   firebase functions:secrets:set WOMPI_PUBLIC_KEY
-//   firebase functions:secrets:set WOMPI_INTEGRITY_SECRET
-//   firebase functions:secrets:set WOMPI_EVENTS_SECRET
-const wompiPublicKey = defineSecret("WOMPI_PUBLIC_KEY");
-const wompiIntegritySecret = defineSecret("WOMPI_INTEGRITY_SECRET");
-const wompiEventsSecret = defineSecret("WOMPI_EVENTS_SECRET");
+//   firebase functions:secrets:set BOLD_IDENTITY_KEY
+//   firebase functions:secrets:set BOLD_SECRET_KEY
+// (Ambas llaves están en el Panel de Comercios de Bold, sección "Botón de pagos".
+// La "llave de identidad" es pública; la "llave secreta" NUNCA debe exponerse al cliente.)
+const boldIdentityKey = defineSecret("BOLD_IDENTITY_KEY");
+const boldSecretKey = defineSecret("BOLD_SECRET_KEY");
 
 type PayablePlan = "pro" | "premium";
 
-// Precios en pesos colombianos. Wompi cobra en "centavos" (pesos * 100).
+// Precios en pesos colombianos, sin decimales (así los pide Bold, a diferencia
+// de otras pasarelas que piden el monto en "centavos").
 const PLAN_PRICES_COP: Record<PayablePlan, number> = {
   pro: 39900,
   premium: 69900,
@@ -30,11 +31,13 @@ const PLAN_PRICES_COP: Record<PayablePlan, number> = {
 const PLAN_DURATION_DAYS = 30;
 
 /**
- * Genera la URL de checkout de Wompi para actualizar de plan.
- * El cliente (web o móvil) llama esta función y redirige al usuario a la URL devuelta.
+ * Genera los datos firmados que el cliente necesita para abrir el checkout
+ * de Bold (usando su constructor `BoldCheckout` en el navegador/WebView).
+ * Guarda también la "intención de compra" en Firestore para que el webhook
+ * sepa, con solo el orderId, a qué usuario y plan corresponde el pago.
  */
-export const createUpgradeCheckout = onCall(
-  { secrets: [wompiPublicKey, wompiIntegritySecret], region: "us-central1" },
+export const createBoldCheckout = onCall(
+  { secrets: [boldIdentityKey, boldSecretKey], region: "us-central1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Debes iniciar sesión para actualizar tu plan.");
@@ -42,135 +45,166 @@ export const createUpgradeCheckout = onCall(
 
     const uid = request.auth.uid;
     const plan = request.data?.plan as PayablePlan;
-    const redirectUrl = (request.data?.redirectUrl ?? "").toString();
+    const redirectionUrl = (request.data?.redirectionUrl ?? "").toString();
 
     if (plan !== "pro" && plan !== "premium") {
       throw new HttpsError("invalid-argument", "Plan inválido. Usa 'pro' o 'premium'.");
     }
-    if (!redirectUrl) {
-      throw new HttpsError("invalid-argument", "Falta la URL de redirección.");
+    if (!redirectionUrl.startsWith("https://")) {
+      throw new HttpsError("invalid-argument", "La URL de redirección debe empezar con https://.");
     }
 
-    const amountInCents = PLAN_PRICES_COP[plan] * 100;
+    const amount = PLAN_PRICES_COP[plan]; // pesos colombianos, sin decimales
     const currency = "COP";
-    // La referencia codifica quién paga y qué plan compra, para que el webhook
-    // sepa a quién actualizar sin depender de una consulta adicional.
-    const reference = `pinak_${uid}_${plan}_${Date.now()}`;
+    const orderId = `pinak-${crypto.randomBytes(8).toString("hex")}-${Date.now()}`;
 
-    // Firma de integridad exigida por Wompi para evitar que alguien manipule
-    // el monto o la referencia antes de llegar a su checkout.
-    const signature = crypto
-      .createHash("sha256")
-      .update(`${reference}${amountInCents}${currency}${wompiIntegritySecret.value()}`)
-      .digest("hex");
-
-    const params = new URLSearchParams({
-      "public-key": wompiPublicKey.value(),
-      currency,
-      "amount-in-cents": String(amountInCents),
-      reference,
-      "signature:integrity": signature,
-      "redirect-url": redirectUrl,
+    // Guarda la intención de compra para que el webhook, que solo recibe el
+    // orderId de vuelta, pueda saber a qué usuario/plan corresponde.
+    await db.collection("checkoutIntents").doc(orderId).set({
+      uid,
+      plan,
+      amount,
+      status: "pending",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    const checkoutUrl = `https://checkout.wompi.co/p/?${params.toString()}`;
+    // Firma de integridad exigida por Bold: SHA256(orderId + monto + moneda + llave secreta)
+    const integritySignature = crypto
+      .createHash("sha256")
+      .update(`${orderId}${amount}${currency}${boldSecretKey.value()}`)
+      .digest("hex");
 
-    logger.info("Checkout de upgrade generado", { uid, plan, reference });
+    logger.info("Checkout de Bold generado", { uid, plan, orderId });
 
-    return { checkoutUrl, reference };
+    return {
+      identityKey: boldIdentityKey.value(),
+      orderId,
+      amount: String(amount),
+      currency,
+      integritySignature,
+      redirectionUrl,
+      description: `PINAK - Plan ${plan === "pro" ? "Pro" : "Premium"}`,
+    };
   }
 );
 
 /**
- * Endpoint público que recibe las notificaciones de Wompi cuando una
- * transacción cambia de estado. Verifica la firma del evento y, si el pago
- * fue aprobado, actualiza el plan del usuario usando permisos de administrador
- * (el cliente nunca puede cambiar su propio plan directamente — ver firestore.rules).
+ * Endpoint público que recibe las notificaciones de Bold cuando una venta
+ * cambia de estado. Verifica la firma HMAC del evento y, si fue aprobada,
+ * actualiza el plan del usuario usando permisos de administrador (el cliente
+ * nunca puede cambiar su propio plan directamente — ver firestore.rules).
  */
-export const wompiWebhook = onRequest(
-  { secrets: [wompiEventsSecret], region: "us-central1" },
+export const boldWebhook = onRequest(
+  { secrets: [boldSecretKey], region: "us-central1" },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).send("Method Not Allowed");
       return;
     }
 
-    const body = req.body as {
-      event?: string;
-      data?: { transaction?: Record<string, unknown> };
-      timestamp?: number;
-      signature?: { checksum?: string; properties?: string[] };
-    };
+    // La verificación de firma de Bold exige el cuerpo CRUDO de la petición
+    // (sin parsear), codificado en Base64. Firebase Functions siempre expone
+    // el buffer original en req.rawBody, incluso cuando también parsea el
+    // JSON en req.body por conveniencia.
+    const rawBody = req.rawBody;
+    const receivedSignature = req.header("x-bold-signature") ?? "";
 
-    if (body.event !== "transaction.updated" || !body.data?.transaction) {
-      res.status(200).send("ignored");
-      return;
-    }
-
-    const { checksum, properties } = body.signature ?? {};
-    if (!checksum || !properties) {
-      logger.warn("Webhook de Wompi sin firma, ignorado");
-      res.status(400).send("missing signature");
-      return;
-    }
-
-    // Reconstruye el string a firmar concatenando los valores de las
-    // propiedades indicadas por Wompi, en el orden que ellos especifican.
-    const values = properties.map((path) => {
-      const parts = path.split(".");
-      let value: unknown = { data: body.data };
-      for (const part of parts) {
-        value = (value as Record<string, unknown> | undefined)?.[part];
-      }
-      return String(value ?? "");
-    });
-    const expectedChecksum = crypto
-      .createHash("sha256")
-      .update(`${values.join("")}${body.timestamp}${wompiEventsSecret.value()}`)
+    const expectedSignature = crypto
+      .createHmac("sha256", boldSecretKey.value())
+      .update(rawBody.toString("base64"))
       .digest("hex");
 
-    if (expectedChecksum !== checksum) {
-      logger.error("Firma de webhook de Wompi inválida — posible solicitud falsa");
+    const validSignature =
+      receivedSignature.length === expectedSignature.length &&
+      crypto.timingSafeEqual(Buffer.from(receivedSignature), Buffer.from(expectedSignature));
+
+    if (!validSignature) {
+      logger.error("Firma de webhook de Bold inválida — posible solicitud falsa");
       res.status(401).send("invalid signature");
       return;
     }
 
-    const transaction = body.data.transaction;
-    const status = transaction.status as string;
-    const reference = transaction.reference as string;
+    const body = req.body as {
+      type?: string;
+      data?: {
+        payment_id?: string;
+        amount?: { total?: number; currency?: string };
+        metadata?: { reference?: string | null };
+      };
+    };
 
-    if (status !== "APPROVED") {
-      res.status(200).send("not approved, ignored");
+    // Solo nos interesan las ventas aprobadas; respondemos 200 al resto para
+    // que Bold no reintente notificaciones que no vamos a procesar.
+    if (body.type !== "SALE_APPROVED") {
+      res.status(200).send("ignored");
       return;
     }
 
-    // reference tiene el formato: pinak_{uid}_{plan}_{timestamp}
-    const match = reference?.match(/^pinak_(.+)_(pro|premium)_\d+$/);
-    if (!match) {
-      logger.error("Referencia de transacción con formato inesperado", { reference });
-      res.status(200).send("unrecognized reference");
+    const reference = body.data?.metadata?.reference;
+    if (!reference) {
+      logger.warn("Notificación de Bold sin referencia, ignorada");
+      res.status(200).send("no reference");
       return;
     }
-    const [, uid, plan] = match;
+
+    const intentRef = db.collection("checkoutIntents").doc(reference);
+    const intentSnap = await intentRef.get();
+
+    if (!intentSnap.exists) {
+      logger.error("Referencia de Bold no encontrada en checkoutIntents", { reference });
+      res.status(200).send("unknown reference");
+      return;
+    }
+
+    const intent = intentSnap.data() as {
+      uid: string;
+      plan: PayablePlan;
+      amount: number;
+      status: string;
+    };
+
+    // Idempotencia: si ya procesamos este pago antes (reintento de Bold), no
+    // lo volvemos a aplicar, pero igual confirmamos recepción con 200.
+    if (intent.status === "completed") {
+      res.status(200).send("already processed");
+      return;
+    }
+
+    const paidAmount = body.data?.amount?.total;
+    if (paidAmount !== intent.amount) {
+      logger.error("El monto pagado no coincide con el esperado — posible manipulación", {
+        reference,
+        esperado: intent.amount,
+        recibido: paidAmount,
+      });
+      res.status(200).send("amount mismatch, not granting plan");
+      return;
+    }
 
     const planExpiresAt = admin.firestore.Timestamp.fromMillis(
       Date.now() + PLAN_DURATION_DAYS * 24 * 60 * 60 * 1000
     );
 
-    await db.doc(`users/${uid}`).set(
-      { plan, planExpiresAt, planUpdatedAt: admin.firestore.FieldValue.serverTimestamp() },
+    await db.doc(`users/${intent.uid}`).set(
+      { plan: intent.plan, planExpiresAt, planUpdatedAt: admin.firestore.FieldValue.serverTimestamp() },
       { merge: true }
     );
 
-    await db.doc(`users/${uid}/payments/${transaction.id}`).set({
-      plan,
-      amountInCents: transaction.amount_in_cents ?? null,
-      status,
+    await db.doc(`users/${intent.uid}/payments/${body.data?.payment_id ?? reference}`).set({
+      plan: intent.plan,
+      amount: paidAmount,
       reference,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    logger.info("Plan actualizado tras pago aprobado", { uid, plan, reference });
+    await intentRef.set({ status: "completed" }, { merge: true });
+
+    logger.info("Plan actualizado tras pago aprobado con Bold", {
+      uid: intent.uid,
+      plan: intent.plan,
+      reference,
+    });
+
     res.status(200).send("ok");
   }
 );
@@ -179,7 +213,7 @@ export const wompiWebhook = onRequest(
  * Corre una vez al día: si un plan pago venció y el usuario no renovó,
  * lo regresa automáticamente al plan gratuito (Emprendedor).
  * Sustituye a un cobro recurrente automático mientras no se integre
- * la tokenización de métodos de pago de Wompi (fase futura).
+ * la tokenización de métodos de pago (fase futura).
  */
 export const downgradeExpiredPlans = onSchedule(
   { schedule: "every 24 hours", region: "us-central1" },
