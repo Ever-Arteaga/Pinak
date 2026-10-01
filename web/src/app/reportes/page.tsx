@@ -5,6 +5,9 @@ import { useAuthUser } from "@/lib/auth";
 import { useTransactions, computeBalance } from "@/lib/transactions";
 import { exportTransactionsToExcel, exportTransactionsToPdf } from "@/lib/reports";
 import { AppHeader } from "@/components/AppHeader";
+import { BarChart } from "@/components/BarChart";
+import { localDateKey } from "@/lib/dates";
+import type { Transaction } from "@/types/pinak";
 
 const currency = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -20,6 +23,47 @@ const RANGE_LABELS: Record<Range, string> = {
   month: "Este mes",
   all: "Todo",
 };
+
+function agruparParaGrafica(transactions: Transaction[], range: Range) {
+  const granularidad = range === "7d" ? "dia" : range === "all" ? "mes" : "semana";
+  const buckets = new Map<
+    string,
+    { label: string; ingreso: number; egreso: number; orden: number }
+  >();
+
+  transactions.forEach((t) => {
+    let clave: string;
+    let label: string;
+    let orden: number;
+
+    if (granularidad === "dia") {
+      clave = localDateKey(t.date);
+      label = t.date.toLocaleDateString("es-CO", { weekday: "short" });
+      orden = t.date.getTime();
+    } else if (granularidad === "semana") {
+      const inicioSemana = new Date(t.date);
+      inicioSemana.setDate(t.date.getDate() - t.date.getDay());
+      clave = localDateKey(inicioSemana);
+      label = `${inicioSemana.getDate()}/${inicioSemana.getMonth() + 1}`;
+      orden = inicioSemana.getTime();
+    } else {
+      clave = `${t.date.getFullYear()}-${t.date.getMonth()}`;
+      label = t.date.toLocaleDateString("es-CO", { month: "short" });
+      orden = t.date.getFullYear() * 12 + t.date.getMonth();
+    }
+
+    if (!buckets.has(clave)) {
+      buckets.set(clave, { label, ingreso: 0, egreso: 0, orden });
+    }
+    const bucket = buckets.get(clave)!;
+    if (t.type === "ingreso") bucket.ingreso += t.amount;
+    else bucket.egreso += t.amount;
+  });
+
+  return Array.from(buckets.values())
+    .sort((a, b) => a.orden - b.orden)
+    .slice(-10); // máximo 10 barras para que se vea bien en móvil
+}
 
 export default function ReportsPage() {
   const { user } = useAuthUser();
@@ -46,6 +90,7 @@ export default function ReportsPage() {
 
   const { balance, totalIngresos, totalEgresos } = computeBalance(filtered);
   const businessName = user.displayName || "Mi negocio";
+  const datosGrafica = agruparParaGrafica(filtered, range);
 
   return (
     <main className="min-h-screen bg-cream pb-24">
@@ -86,6 +131,16 @@ export default function ReportsPage() {
                 {currency.format(totalEgresos)}
               </p>
             </div>
+          </div>
+        </section>
+
+        {/* Gráfica de ingresos vs egresos del periodo */}
+        <section className="mt-4 rounded-2xl border border-line bg-white p-5">
+          <h2 className="font-display text-sm font-semibold text-navy-900">
+            Movimientos por periodo
+          </h2>
+          <div className="mt-3">
+            <BarChart data={datosGrafica} formatValue={(v) => currency.format(v)} />
           </div>
         </section>
 

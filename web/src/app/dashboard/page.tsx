@@ -10,6 +10,8 @@ import { computeBalance, useTransactions } from "@/lib/transactions";
 import { AddTransactionModal } from "@/components/AddTransactionModal";
 import { AiQuickAddModal } from "@/components/AiQuickAddModal";
 import { AppHeader } from "@/components/AppHeader";
+import { BarChart } from "@/components/BarChart";
+import { localDateKey } from "@/lib/dates";
 import { PLAN_LIMITS, type Transaction } from "@/types/pinak";
 
 const currency = new Intl.NumberFormat("es-CO", {
@@ -17,6 +19,30 @@ const currency = new Intl.NumberFormat("es-CO", {
   currency: "COP",
   maximumFractionDigits: 0,
 });
+
+function agruparUltimos7Dias(transactions: Transaction[]) {
+  const hoy = new Date();
+  const dias = Array.from({ length: 7 }, (_, i) => {
+    const fecha = new Date(hoy);
+    fecha.setDate(hoy.getDate() - (6 - i));
+    return {
+      clave: localDateKey(fecha),
+      label: fecha.toLocaleDateString("es-CO", { weekday: "short" }),
+      ingreso: 0,
+      egreso: 0,
+    };
+  });
+
+  transactions.forEach((t) => {
+    const clave = localDateKey(t.date);
+    const dia = dias.find((d) => d.clave === clave);
+    if (!dia) return;
+    if (t.type === "ingreso") dia.ingreso += t.amount;
+    else dia.egreso += t.amount;
+  });
+
+  return dias;
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -43,6 +69,7 @@ export default function DashboardPage() {
 
   const { balance, totalIngresos, totalEgresos } = computeBalance(transactions);
   const recientes = transactions.slice(0, 8);
+  const datosGrafica = agruparUltimos7Dias(transactions);
 
   return (
     <main className="min-h-screen bg-cream pb-24">
@@ -69,6 +96,16 @@ export default function DashboardPage() {
                 {currency.format(totalEgresos)}
               </p>
             </div>
+          </div>
+        </section>
+
+        {/* Gráfica de ingresos vs egresos */}
+        <section className="mt-4 rounded-2xl border border-line bg-white p-5">
+          <h2 className="font-display text-sm font-semibold text-navy-900">
+            Últimos 7 días
+          </h2>
+          <div className="mt-3">
+            <BarChart data={datosGrafica} formatValue={(v) => currency.format(v)} />
           </div>
         </section>
 
