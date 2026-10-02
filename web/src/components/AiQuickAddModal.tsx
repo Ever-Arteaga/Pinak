@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { addTransaction } from "@/lib/transactions";
 import { parseTransactionText, type AiParsedTransaction } from "@/lib/ai";
+import { useSpeechRecognition } from "@/lib/speech";
 
 const currency = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -11,6 +12,20 @@ const currency = new Intl.NumberFormat("es-CO", {
 });
 
 type Step = "input" | "preview";
+
+function MicIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="9" y="3" width="6" height="12" rx="3" stroke="currentColor" strokeWidth={2} />
+      <path
+        d="M5 11a7 7 0 0014 0M12 18v3"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 export function AiQuickAddModal({ userId, onClose }: { userId: string; onClose: () => void }) {
   const [step, setStep] = useState<Step>("input");
@@ -21,9 +36,38 @@ export function AiQuickAddModal({ userId, onClose }: { userId: string; onClose: 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Voz: el texto dictado se agrega al que ya estaba escrito.
+  const baseTextRef = useRef("");
+  const usedVoiceRef = useRef(false);
+
+  const handleTranscript = useCallback((finalText: string, interim: string) => {
+    const dictado = [finalText, interim].filter(Boolean).join(" ");
+    const base = baseTextRef.current;
+    setText(base ? `${base} ${dictado}`.trim() : dictado);
+    if (finalText) usedVoiceRef.current = true;
+  }, []);
+
+  const {
+    supported: voiceSupported,
+    listening,
+    error: voiceError,
+    start: startVoice,
+    stop: stopVoice,
+  } = useSpeechRecognition(handleTranscript);
+
+  function toggleMic() {
+    if (listening) {
+      stopVoice();
+      return;
+    }
+    baseTextRef.current = text.trim();
+    startVoice();
+  }
+
   async function handleAnalyze(e: React.FormEvent) {
     e.preventDefault();
     if (!text.trim()) return;
+    if (listening) stopVoice();
 
     setProcessing(true);
     setError(null);
@@ -57,6 +101,7 @@ export function AiQuickAddModal({ userId, onClose }: { userId: string; onClose: 
             category: c.category,
             method: c.method,
             description: c.description,
+            source: usedVoiceRef.current ? "ia_voz" : "ia_texto",
           })
         )
       );
@@ -91,7 +136,7 @@ export function AiQuickAddModal({ userId, onClose }: { userId: string; onClose: 
         {step === "input" && (
           <form onSubmit={handleAnalyze} className="mt-4 flex flex-col gap-3">
             <p className="text-sm text-ink-soft">
-              Cuéntame qué pasó, como si le hablaras a un asistente. Por ejemplo:{" "}
+              Cuéntame qué pasó escribiendo o hablando, como si le hablaras a un asistente. Por ejemplo:{" "}
               <span className="italic">
                 &ldquo;Vendí 60.000 en Nequi y gasté 15.000 en insumos en efectivo&rdquo;
               </span>
@@ -101,11 +146,39 @@ export function AiQuickAddModal({ userId, onClose }: { userId: string; onClose: 
               rows={4}
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Escribe o dicta con el micrófono de tu teclado..."
+              readOnly={listening}
+              placeholder={
+                voiceSupported
+                  ? "Escribe o toca el micrófono para dictar..."
+                  : "Escribe lo que pasó..."
+              }
               className="w-full resize-none rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
             />
-            {error && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-danger">{error}</p>
+            {voiceSupported ? (
+              <button
+                type="button"
+                onClick={toggleMic}
+                disabled={processing}
+                aria-pressed={listening}
+                className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition disabled:opacity-60 ${
+                  listening
+                    ? "animate-pulse border-danger bg-red-50 text-danger"
+                    : "border-line text-navy-900 hover:bg-cream"
+                }`}
+              >
+                <MicIcon />
+                {listening ? "Escuchando... toca para detener" : "Dictar con voz"}
+              </button>
+            ) : (
+              <p className="text-xs text-ink-soft">
+                Tu navegador no permite dictado por voz. Prueba con Chrome, Edge o Safari, o usa
+                el micrófono de tu teclado.
+              </p>
+            )}
+            {(voiceError || error) && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-danger">
+                {voiceError ?? error}
+              </p>
             )}
             <button
               type="submit"

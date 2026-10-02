@@ -69,11 +69,12 @@ export interface PlanConfig {
   users: number;
   aiEnabled: boolean;
   aiRegistrationsPerMonth: number | null; // null = ilimitado
+  privacyMode: boolean; // oculta montos en pantalla (solo Premium)
   priceCOP: number;
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
-  emprendedor: { users: 1, aiEnabled: false, aiRegistrationsPerMonth: 0, priceCOP: 0 },
-  pro: { users: 2, aiEnabled: true, aiRegistrationsPerMonth: null, priceCOP: 39900 },
-  premium: { users: Infinity, aiEnabled: true, aiRegistrationsPerMonth: null, priceCOP: 69900 },
+  emprendedor: { users: 1, aiEnabled: false, aiRegistrationsPerMonth: 0, privacyMode: false, priceCOP: 0 },
+  pro: { users: 2, aiEnabled: true, aiRegistrationsPerMonth: null, privacyMode: false, priceCOP: 39900 },
+  premium: { users: Infinity, aiEnabled: true, aiRegistrationsPerMonth: null, privacyMode: true, priceCOP: 69900 },
 };

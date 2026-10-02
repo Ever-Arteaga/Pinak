@@ -4,7 +4,9 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { logoutUser } from "@/lib/auth";
+import { usePrivacy } from "@/lib/privacy";
 import { PinakWordmark } from "./PinakLogo";
+import { EyeOffIcon } from "./PrivacyIcons";
 
 function CloseIcon() {
   return (
@@ -94,6 +96,8 @@ const ENLACES = [
 export function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { available: privacyAvailable, enabled: privacyEnabled, toggle: togglePrivacy } =
+    usePrivacy();
 
   // Cierra con la tecla Escape
   useEffect(() => {
@@ -166,6 +170,49 @@ export function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => v
             );
           })}
         </nav>
+
+        {/* Modo privacidad: interruptor para Premium, invitación a mejorar para los demás */}
+        <div className="border-t border-line px-3 py-3">
+          {privacyAvailable ? (
+            <button
+              onClick={() => togglePrivacy()}
+              role="switch"
+              aria-checked={privacyEnabled}
+              className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft transition hover:bg-cream hover:text-navy-900"
+            >
+              <span className="flex items-center gap-3">
+                <EyeOffIcon />
+                Modo privacidad
+              </span>
+              <span
+                aria-hidden="true"
+                className={`relative h-5 w-9 rounded-full transition ${
+                  privacyEnabled ? "bg-green-600" : "bg-line"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
+                    privacyEnabled ? "left-[18px]" : "left-0.5"
+                  }`}
+                />
+              </span>
+            </button>
+          ) : (
+            <Link
+              href="/upgrade"
+              onClick={onClose}
+              className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft transition hover:bg-cream hover:text-navy-900"
+            >
+              <span className="flex items-center gap-3">
+                <EyeOffIcon />
+                Modo privacidad
+              </span>
+              <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-navy-900">
+                Premium
+              </span>
+            </Link>
+          )}
+        </div>
 
         <div className="border-t border-line px-3 py-4">
           <button

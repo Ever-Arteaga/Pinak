@@ -8,6 +8,7 @@ import type { Plan } from "@/types/pinak";
 interface UserProfileData {
   businessName: string;
   plan: Plan;
+  privacyModeEnabled: boolean;
 }
 
 /** Hook en tiempo real con el perfil del negocio del usuario (incluye el plan actual). */
@@ -30,6 +31,7 @@ export function useUserProfile(userId: string | undefined) {
           ? {
               businessName: data.businessName ?? "",
               plan: (data.plan as Plan) ?? "emprendedor",
+              privacyModeEnabled: data.privacyModeEnabled === true,
             }
           : null
       );

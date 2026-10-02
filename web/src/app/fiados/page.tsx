@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAuthUser } from "@/lib/auth";
+import { usePrivacy } from "@/lib/privacy";
 import {
   buildWhatsAppCollectionLink,
   markReceivableAsPaid,
@@ -11,14 +12,9 @@ import { AddReceivableModal } from "@/components/AddReceivableModal";
 import { AppHeader } from "@/components/AppHeader";
 import type { Receivable } from "@/types/pinak";
 
-const currency = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
-
 export default function ReceivablesPage() {
   const { user } = useAuthUser();
+  const { money } = usePrivacy();
   const { receivables, loading } = useReceivables(user?.uid);
   const [showModal, setShowModal] = useState(false);
   const [editingReceivable, setEditingReceivable] = useState<Receivable | null>(null);
@@ -36,7 +32,7 @@ export default function ReceivablesPage() {
         <section className="rounded-2xl bg-navy-900 p-6 text-white shadow-sm">
           <p className="text-sm text-white/70">Total por cobrar</p>
           <p className="font-display mt-1 text-3xl font-semibold tracking-tight">
-            {currency.format(totalPendiente)}
+            {money(totalPendiente)}
           </p>
           <p className="mt-2 text-xs text-white/60">
             {pendientes.length} {pendientes.length === 1 ? "fiado pendiente" : "fiados pendientes"}
@@ -92,7 +88,7 @@ export default function ReceivablesPage() {
                       r.status === "pagado" ? "text-ink-soft line-through" : "text-navy-900"
                     }`}
                   >
-                    {currency.format(r.amount)}
+                    {money(r.amount)}
                   </p>
                 </button>
 

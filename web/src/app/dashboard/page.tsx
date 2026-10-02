@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useAuthUser } from "@/lib/auth";
 import { logoutUser } from "@/lib/auth";
 import { useUserProfile } from "@/lib/userProfile";
+import { usePrivacy } from "@/lib/privacy";
+import { EyeIcon, EyeOffIcon } from "@/components/PrivacyIcons";
 import { computeBalance, useTransactions } from "@/lib/transactions";
 import { AddTransactionModal } from "@/components/AddTransactionModal";
 import { AiQuickAddModal } from "@/components/AiQuickAddModal";
@@ -13,12 +15,6 @@ import { AppHeader } from "@/components/AppHeader";
 import { BarChart } from "@/components/BarChart";
 import { localDateKey } from "@/lib/dates";
 import { PLAN_LIMITS, type Transaction } from "@/types/pinak";
-
-const currency = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
 
 function agruparUltimos7Dias(transactions: Transaction[]) {
   const hoy = new Date();
@@ -48,6 +44,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuthUser();
   const { profile } = useUserProfile(user?.uid);
+  const { money, available: privacyAvailable, enabled: privacyEnabled, toggle: togglePrivacy } =
+    usePrivacy();
   const { transactions, loading: txLoading } = useTransactions(user?.uid);
   const [showModal, setShowModal] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
@@ -79,21 +77,33 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-md px-5 pt-6">
         {/* Tarjeta de balance total */}
         <section className="rounded-2xl bg-navy-900 p-6 text-white shadow-sm">
-          <p className="text-sm text-white/70">Balance total</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-white/70">Balance total</p>
+            {privacyAvailable && (
+              <button
+                onClick={() => togglePrivacy()}
+                aria-label={privacyEnabled ? "Mostrar montos" : "Ocultar montos"}
+                title={privacyEnabled ? "Mostrar montos" : "Ocultar montos"}
+                className="-mr-2 -mt-2 rounded-lg p-2 text-white/70 transition hover:bg-white/10 hover:text-white"
+              >
+                {privacyEnabled ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            )}
+          </div>
           <p className="font-display mt-1 text-3xl font-semibold tracking-tight">
-            {currency.format(balance)}
+            {money(balance)}
           </p>
           <div className="mt-5 flex gap-6">
             <div>
               <p className="text-xs text-white/60">Ingresos</p>
               <p className="text-sm font-medium text-green-500">
-                {currency.format(totalIngresos)}
+                {money(totalIngresos)}
               </p>
             </div>
             <div>
               <p className="text-xs text-white/60">Egresos</p>
               <p className="text-sm font-medium text-red-300">
-                {currency.format(totalEgresos)}
+                {money(totalEgresos)}
               </p>
             </div>
           </div>
@@ -105,7 +115,7 @@ export default function DashboardPage() {
             Últimos 7 días
           </h2>
           <div className="mt-3">
-            <BarChart data={datosGrafica} formatValue={(v) => currency.format(v)} />
+            <BarChart data={datosGrafica} formatValue={(v) => money(v)} />
           </div>
         </section>
 
@@ -201,7 +211,7 @@ export default function DashboardPage() {
                   }`}
                 >
                   {t.type === "ingreso" ? "+" : "-"}
-                  {currency.format(t.amount)}
+                  {money(t.amount)}
                 </p>
               </button>
             ))}

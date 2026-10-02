@@ -1,0 +1,29 @@
+{
+  "name": "pinak",
+  "version": "1.0.0",
+  "description": "PINAK — software contable para pequeños negocios (web Next.js, móvil Expo y Cloud Functions de Firebase)",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "install:all": "npm --prefix web install && npm --prefix mobile install && npm --prefix functions install",
+
+    "web": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "web:typecheck": "cd web && npx tsc --noEmit",
+
+    "mobile": "npm --prefix mobile run start",
+    "mobile:android": "npm --prefix mobile run android",
+    "mobile:ios": "npm --prefix mobile run ios",
+
+    "functions:build": "npm --prefix functions run build",
+    "functions:serve": "npm --prefix functions run serve",
+    "functions:logs": "npm --prefix functions run logs",
+
+    "deploy:rules": "firebase deploy --only firestore:rules",
+    "deploy:functions": "firebase deploy --only functions",
+    "deploy:hosting": "npm run web:build && firebase deploy --only hosting",
+    "deploy": "npm run web:build && firebase deploy"
+  }
+}

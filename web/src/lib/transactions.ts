@@ -23,6 +23,8 @@ interface NewTransactionInput {
   method: Transaction["method"];
   description?: string;
   date?: Date;
+  /** Origen del registro. Por defecto "manual". */
+  source?: Transaction["source"];
 }
 
 export async function addTransaction(userId: string, input: NewTransactionInput) {
@@ -34,7 +36,7 @@ export async function addTransaction(userId: string, input: NewTransactionInput)
     method: input.method,
     description: input.description ?? "",
     date: input.date ? Timestamp.fromDate(input.date) : serverTimestamp(),
-    source: "manual",
+    source: input.source ?? "manual",
     createdAt: serverTimestamp(),
   });
 }

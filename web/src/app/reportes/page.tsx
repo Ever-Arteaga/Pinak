@@ -2,18 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useAuthUser } from "@/lib/auth";
+import { usePrivacy } from "@/lib/privacy";
 import { useTransactions, computeBalance } from "@/lib/transactions";
 import { exportTransactionsToExcel, exportTransactionsToPdf } from "@/lib/reports";
 import { AppHeader } from "@/components/AppHeader";
 import { BarChart } from "@/components/BarChart";
 import { localDateKey } from "@/lib/dates";
 import type { Transaction } from "@/types/pinak";
-
-const currency = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
 
 type Range = "7d" | "30d" | "month" | "all";
 
@@ -67,6 +62,7 @@ function agruparParaGrafica(transactions: Transaction[], range: Range) {
 
 export default function ReportsPage() {
   const { user } = useAuthUser();
+  const { money } = usePrivacy();
   const { transactions, loading } = useTransactions(user?.uid);
   const [range, setRange] = useState<Range>("30d");
 
@@ -116,19 +112,19 @@ export default function ReportsPage() {
         <section className="mt-4 rounded-2xl bg-navy-900 p-6 text-white shadow-sm">
           <p className="text-sm text-white/70">Balance del periodo</p>
           <p className="font-display mt-1 text-3xl font-semibold tracking-tight">
-            {currency.format(balance)}
+            {money(balance)}
           </p>
           <div className="mt-5 flex gap-6">
             <div>
               <p className="text-xs text-white/60">Ingresos</p>
               <p className="text-sm font-medium text-green-500">
-                {currency.format(totalIngresos)}
+                {money(totalIngresos)}
               </p>
             </div>
             <div>
               <p className="text-xs text-white/60">Egresos</p>
               <p className="text-sm font-medium text-red-300">
-                {currency.format(totalEgresos)}
+                {money(totalEgresos)}
               </p>
             </div>
           </div>
@@ -140,7 +136,7 @@ export default function ReportsPage() {
             Movimientos por periodo
           </h2>
           <div className="mt-3">
-            <BarChart data={datosGrafica} formatValue={(v) => currency.format(v)} />
+            <BarChart data={datosGrafica} formatValue={(v) => money(v)} />
           </div>
         </section>
 
@@ -189,7 +185,7 @@ export default function ReportsPage() {
                   }`}
                 >
                   {t.type === "ingreso" ? "+" : "-"}
-                  {currency.format(t.amount)}
+                  {money(t.amount)}
                 </p>
               </div>
             ))}
