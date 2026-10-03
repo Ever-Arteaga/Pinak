@@ -1,8 +1,0 @@
-{
-  "name": "PINAK — Asistente Financiero con IA",
-  "description": "El asistente financiero con IA que pone tu negocio en piloto automático.",
-  "permissions": [],
-  "capabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
