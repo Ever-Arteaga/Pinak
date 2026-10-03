@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginUser, loginWithGoogle, registerUser } from "@/lib/auth";
-import { PinakWordmark } from "@/components/PinakLogo";
+import { PinakLogoFull } from "@/components/PinakLogo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -56,8 +56,8 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-cream px-6">
       <div className="w-full max-w-sm">
-        <div className="mb-10 flex justify-center">
-          <PinakWordmark />
+        <div className="mb-8 flex justify-center">
+          <PinakLogoFull width={190} />
         </div>
 
         <div className="rounded-2xl border border-line bg-white p-8 shadow-sm">

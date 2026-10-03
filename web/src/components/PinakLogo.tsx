@@ -1,5 +1,6 @@
 import Image from "next/image";
 
+/** Solo el isotipo: la "P" con la flecha de crecimiento. */
 export function PinakMark({ size = 40 }: { size?: number }) {
   return (
     <Image
@@ -13,13 +14,33 @@ export function PinakMark({ size = 40 }: { size?: number }) {
   );
 }
 
+/** Versión horizontal para encabezados: isotipo + la palabra PINAK del logo. */
 export function PinakWordmark({ className = "" }: { className?: string }) {
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <PinakMark size={28} />
-      <span className="font-display font-semibold text-lg tracking-tight text-navy-900">
-        PINAK
-      </span>
+    <div className={`flex items-center gap-2.5 ${className}`}>
+      <PinakMark size={30} />
+      <Image
+        src="/pinak-wordmark.png"
+        alt="PINAK"
+        width={100}
+        height={16}
+        style={{ height: 15, width: "auto" }}
+        priority
+      />
     </div>
+  );
+}
+
+/** Logo completo (P + PINAK + "AI · Finance · Future") para pantallas de bienvenida. */
+export function PinakLogoFull({ width = 200 }: { width?: number }) {
+  return (
+    <Image
+      src="/pinak-logo.png"
+      alt="PINAK — AI · Finance · Future"
+      width={815}
+      height={753}
+      style={{ width, height: "auto" }}
+      priority
+    />
   );
 }

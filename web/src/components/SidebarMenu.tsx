@@ -7,6 +7,7 @@ import { logoutUser } from "@/lib/auth";
 import { usePrivacy } from "@/lib/privacy";
 import { PinakWordmark } from "./PinakLogo";
 import { EyeOffIcon } from "./PrivacyIcons";
+import { InstallAppButton } from "./InstallAppButton";
 
 function CloseIcon() {
   return (
@@ -170,6 +171,8 @@ export function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => v
             );
           })}
         </nav>
+
+        <InstallAppButton />
 
         {/* Modo privacidad: interruptor para Premium, invitación a mejorar para los demás */}
         <div className="border-t border-line px-3 py-3">
