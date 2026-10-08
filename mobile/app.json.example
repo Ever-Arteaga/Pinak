@@ -27,15 +27,15 @@
     },
     "scheme": "pinak",
     "extra": {
-      "firebaseApiKey": "REEMPLAZA_CON_TU_API_KEY",
-      "firebaseAuthDomain": "pinak-dev.firebaseapp.com",
-      "firebaseProjectId": "pinak-dev",
-      "firebaseStorageBucket": "pinak-dev.firebasestorage.app",
-      "firebaseMessagingSenderId": "246119299201",
-      "firebaseAppId": "REEMPLAZA_CON_TU_APP_ID",
-      "googleIosClientId": "REEMPLAZA_CON_TU_IOS_CLIENT_ID",
-      "googleAndroidClientId": "REEMPLAZA_CON_TU_ANDROID_CLIENT_ID",
-      "googleWebClientId": "REEMPLAZA_CON_TU_WEB_CLIENT_ID"
-    }
+  "firebaseApiKey": "AIzaSyCey77jWc-SA9gIzf3Iv1R4Fq-ODQmZmV4",
+  "firebaseAuthDomain": "pinak-dev.firebaseapp.com",
+  "firebaseProjectId": "pinak-dev",
+  "firebaseStorageBucket": "pinak-dev.firebasestorage.app",
+  "firebaseMessagingSenderId": "246119299201",
+  "firebaseAppId": "1:246119299201:web:f4c2766403866817263580",
+  "googleIosClientId": "REEMPLAZA_CON_TU_IOS_CLIENT_ID",
+  "googleAndroidClientId": "REEMPLAZA_CON_TU_ANDROID_CLIENT_ID",
+  "googleWebClientId": "REEMPLAZA_CON_TU_WEB_CLIENT_ID"
+}
   }
 }

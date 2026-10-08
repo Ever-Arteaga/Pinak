@@ -16,11 +16,27 @@ export interface PinakUser {
   email: string;
   businessName: string;
   businessType?: string;
+  phone?: string;
+  city?: string;
+  nit?: string;
+  description?: string;
   plan: Plan;
   planStartedAt: Date;
   createdAt: Date;
   privacyModeEnabled?: boolean;
 }
+
+export const BUSINESS_TYPES = [
+  "Tienda / Minimercado",
+  "Restaurante / Comida",
+  "Ropa y accesorios",
+  "Belleza y cuidado personal",
+  "Ferretería",
+  "Papelería",
+  "Servicios profesionales",
+  "Tecnología",
+  "Otro",
+] as const;
 
 export interface Transaction {
   id: string;
