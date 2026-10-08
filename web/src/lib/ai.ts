@@ -17,14 +17,14 @@ interface ParseTransactionTextResult {
   usage: { used: number; limit: number | null };
 }
 
-export async function parseTransactionText(text: string): Promise<ParseTransactionTextResult> {
-  const callable = httpsCallable<{ text: string }, ParseTransactionTextResult>(
+export async function parseTransactionText(text: string, businessId: string): Promise<ParseTransactionTextResult> {
+  const callable = httpsCallable<{ text: string; businessId: string }, ParseTransactionTextResult>(
     functions,
     "parseTransactionText"
   );
 
   try {
-    const result = await callable({ text });
+    const result = await callable({ text, businessId });
     return result.data;
   } catch (err) {
     const fnError = err as FunctionsError;

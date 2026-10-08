@@ -15,11 +15,11 @@ const METHODS: { value: PaymentMethod; label: string }[] = [
 ];
 
 export function AddTransactionModal({
-  userId,
+  businessId,
   editingTransaction,
   onClose,
 }: {
-  userId: string;
+  businessId: string;
   editingTransaction?: Transaction;
   onClose: () => void;
 }) {
@@ -37,7 +37,7 @@ export function AddTransactionModal({
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  const { categories } = useCategories(userId);
+  const { categories } = useCategories(businessId);
   const categoriesForType = categories.filter((c) => c.type === type);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -55,7 +55,7 @@ export function AddTransactionModal({
         (c) => c.name.toLowerCase() === finalCategory.toLowerCase()
       );
       if (addingCustom && !alreadyExists) {
-        await addCategory(userId, finalCategory, type);
+        await addCategory(businessId, finalCategory, type);
       }
 
       const payload = {
@@ -66,9 +66,9 @@ export function AddTransactionModal({
         description,
       };
       if (isEditing && editingTransaction) {
-        await updateTransaction(userId, editingTransaction.id, payload);
+        await updateTransaction(businessId, editingTransaction.id, payload);
       } else {
-        await addTransaction(userId, payload);
+        await addTransaction(businessId, payload);
       }
       onClose();
     } catch (err) {
@@ -88,7 +88,7 @@ export function AddTransactionModal({
     setDeleting(true);
     setError(null);
     try {
-      await deleteTransaction(userId, editingTransaction.id);
+      await deleteTransaction(businessId, editingTransaction.id);
       onClose();
     } catch (err) {
       console.error("Error al eliminar transacción:", err);

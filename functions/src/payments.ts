@@ -3,6 +3,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
+import { syncBusinessPlans } from "./businesses";
 import * as crypto from "crypto";
 
 if (admin.apps.length === 0) {
@@ -190,6 +191,16 @@ export const boldWebhook = onRequest(
       { merge: true }
     );
 
+    // El plan del dueño se refleja en todos sus negocios (desbloquea y habilita
+    // a sus equipos). Si falla, se responde 500 para que Bold reintente.
+    try {
+      await syncBusinessPlans(intent.uid, intent.plan);
+    } catch (err) {
+      logger.error("No se pudo sincronizar el plan con los negocios", { uid: intent.uid, err });
+      res.status(500).send("business sync failed");
+      return;
+    }
+
     await db.doc(`users/${intent.uid}/payments/${body.data?.payment_id ?? reference}`).set({
       plan: intent.plan,
       amount: paidAmount,
@@ -235,6 +246,16 @@ export const downgradeExpiredPlans = onSchedule(
       batch.update(doc.ref, { plan: "emprendedor" });
     });
     await batch.commit();
+
+    // Los negocios del usuario pierden los beneficios del plan vencido:
+    // se bloquean los que no caben y se recorta el equipo al límite del plan gratuito.
+    for (const doc of expired.docs) {
+      try {
+        await syncBusinessPlans(doc.id, "emprendedor", { cancelPendingInvites: true });
+      } catch (err) {
+        logger.error("No se pudo ajustar los negocios tras el vencimiento", { uid: doc.id, err });
+      }
+    }
 
     logger.info(`Planes degradados a emprendedor por vencimiento: ${expired.size}`);
   }

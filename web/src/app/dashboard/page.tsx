@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthUser } from "@/lib/auth";
 import { logoutUser } from "@/lib/auth";
-import { useUserProfile } from "@/lib/userProfile";
+import { useBusiness } from "@/lib/business";
+import { useBusinessGate } from "@/components/BusinessGate";
+import { InvitationsBanner } from "@/components/InvitationsBanner";
 import { usePrivacy } from "@/lib/privacy";
 import { EyeIcon, EyeOffIcon } from "@/components/PrivacyIcons";
 import { computeBalance, useTransactions } from "@/lib/transactions";
@@ -43,10 +45,10 @@ function agruparUltimos7Dias(transactions: Transaction[]) {
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuthUser();
-  const { profile } = useUserProfile(user?.uid);
+  const { business } = useBusiness();
   const { money, available: privacyAvailable, enabled: privacyEnabled, toggle: togglePrivacy } =
     usePrivacy();
-  const { transactions, loading: txLoading } = useTransactions(user?.uid);
+  const { transactions, loading: txLoading } = useTransactions(business?.id);
   const [showModal, setShowModal] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -57,13 +59,9 @@ export default function DashboardPage() {
     }
   }, [authLoading, user, router]);
 
-  if (authLoading || !user) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-cream">
-        <p className="text-sm text-ink-soft">Cargando...</p>
-      </main>
-    );
-  }
+  const gate = useBusinessGate();
+  if (gate) return gate;
+  const biz = business!;
 
   const { balance, totalIngresos, totalEgresos } = computeBalance(transactions);
   const recientes = transactions.slice(0, 8);
@@ -119,8 +117,10 @@ export default function DashboardPage() {
           </div>
         </section>
 
+        <InvitationsBanner />
+
         {/* Registro rápido con IA — solo planes Pro y Premium */}
-        {profile && PLAN_LIMITS[profile.plan].aiEnabled && (
+        {PLAN_LIMITS[biz.plan].aiEnabled && (
           <button
             onClick={() => setShowAiModal(true)}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
@@ -130,7 +130,7 @@ export default function DashboardPage() {
           </button>
         )}
 
-        {profile && !PLAN_LIMITS[profile.plan].aiEnabled && (
+        {!PLAN_LIMITS[biz.plan].aiEnabled && (
           <Link
             href="/upgrade"
             className="mt-4 flex w-full items-center justify-between gap-2 rounded-xl border border-dashed border-line bg-white px-4 py-3.5 text-sm transition hover:bg-cream"
@@ -220,16 +220,16 @@ export default function DashboardPage() {
       </div>
 
       {showModal && (
-        <AddTransactionModal userId={user.uid} onClose={() => setShowModal(false)} />
+        <AddTransactionModal businessId={biz.id} onClose={() => setShowModal(false)} />
       )}
 
       {showAiModal && (
-        <AiQuickAddModal userId={user.uid} onClose={() => setShowAiModal(false)} />
+        <AiQuickAddModal businessId={biz.id} onClose={() => setShowAiModal(false)} />
       )}
 
       {editingTransaction && (
         <AddTransactionModal
-          userId={user.uid}
+          businessId={biz.id}
           editingTransaction={editingTransaction}
           onClose={() => setEditingTransaction(null)}
         />

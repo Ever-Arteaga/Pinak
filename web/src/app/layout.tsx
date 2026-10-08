@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { PwaRegister } from "@/components/PwaRegister";
+import { BusinessProvider } from "@/lib/business";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -44,7 +45,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-cream text-ink">
-        {children}
+        <BusinessProvider>{children}</BusinessProvider>
         <PwaRegister />
       </body>
     </html>

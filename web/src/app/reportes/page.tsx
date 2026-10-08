@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useAuthUser } from "@/lib/auth";
+import { useBusiness } from "@/lib/business";
+import { useBusinessGate } from "@/components/BusinessGate";
+import { ExportButtons } from "@/components/ExportButtons";
 import { usePrivacy } from "@/lib/privacy";
 import { useTransactions, computeBalance } from "@/lib/transactions";
 import { exportTransactionsToExcel, exportTransactionsToPdf } from "@/lib/reports";
 import { AppHeader } from "@/components/AppHeader";
 import { BarChart } from "@/components/BarChart";
 import { localDateKey } from "@/lib/dates";
-import type { Transaction } from "@/types/pinak";
+import { PLAN_LIMITS, type Transaction } from "@/types/pinak";
 
 type Range = "7d" | "30d" | "month" | "all";
 
@@ -61,9 +63,9 @@ function agruparParaGrafica(transactions: Transaction[], range: Range) {
 }
 
 export default function ReportsPage() {
-  const { user } = useAuthUser();
+  const { business } = useBusiness();
   const { money } = usePrivacy();
-  const { transactions, loading } = useTransactions(user?.uid);
+  const { transactions, loading } = useTransactions(business?.id);
   const [range, setRange] = useState<Range>("30d");
 
   const filtered = useMemo(() => {
@@ -82,10 +84,12 @@ export default function ReportsPage() {
     return transactions.filter((t) => t.date >= start);
   }, [transactions, range]);
 
-  if (!user) return null;
+  const gate = useBusinessGate();
+  if (gate) return gate;
+  const biz = business!;
 
   const { balance, totalIngresos, totalEgresos } = computeBalance(filtered);
-  const businessName = user.displayName || "Mi negocio";
+  const businessName = biz.name;
   const datosGrafica = agruparParaGrafica(filtered, range);
 
   return (
@@ -140,22 +144,12 @@ export default function ReportsPage() {
           </div>
         </section>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <button
-            onClick={() => exportTransactionsToPdf(businessName, filtered)}
-            disabled={filtered.length === 0}
-            className="rounded-xl border border-line bg-white py-3 text-sm font-semibold text-navy-900 transition hover:bg-green-100 disabled:opacity-50"
-          >
-            Exportar PDF
-          </button>
-          <button
-            onClick={() => exportTransactionsToExcel(businessName, filtered)}
-            disabled={filtered.length === 0}
-            className="rounded-xl border border-line bg-white py-3 text-sm font-semibold text-navy-900 transition hover:bg-green-100 disabled:opacity-50"
-          >
-            Exportar Excel
-          </button>
-        </div>
+        <ExportButtons
+          allowed={PLAN_LIMITS[biz.plan].exports}
+          disabled={filtered.length === 0}
+          onPdf={() => exportTransactionsToPdf(businessName, filtered)}
+          onExcel={() => exportTransactionsToExcel(businessName, filtered)}
+        />
 
         <section className="mt-8">
           <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-soft">

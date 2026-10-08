@@ -14,7 +14,7 @@ pinak/
   web/                    # Next.js 15 + TypeScript + Tailwind (export estático)
   mobile/                 # Expo SDK 54 (React Native) + TypeScript
   firebase.json           # Config del Firebase CLI
-  .firebaserc             # Referencia al proyecto pinak-cd2e4
+  .firebaserc             # Referencia al proyecto pinak-dev
 ```
 
 ## Qué incluye
@@ -45,27 +45,29 @@ pinak/
 
 ## Planes
 
-| Plan | Precio | IA por voz/texto | Usuarios | Negocios |
-|---|---|---|---|---|
-| Emprendedor | Gratis | ❌ No disponible | 1 | 1 |
-| Pro | $39.900 COP/mes | ✅ Ilimitada | Hasta 2 | 1 |
-| Premium | $69.900 COP/mes | ✅ Ilimitada | Ilimitados | Multi-negocio |
+| | Emprendedor | Pro | Premium |
+|---|---|---|---|
+| Precio | Gratis | $39.900/mes | $69.900/mes |
+| Movimientos, fiados y reportes | Sí | Sí | Sí |
+| Registro por voz y texto con IA | — | Ilimitado | Ilimitado |
+| Exportar reportes a PDF y Excel | — | Sí | Sí |
+| Usuarios por negocio | 1 | 2 (dueño + 1) | Ilimitados |
+| Negocios por cuenta | 1 | 1 | Ilimitados |
+| Diagnóstico financiero mensual con IA | — | — | Sí |
+| Modo privacidad (oculta montos) | — | — | Sí |
 
-**Roadmap de diferenciación para Premium** (aún no implementado en código):
-- Modo privacidad en pantalla (oculta saldos frente a clientes/empleados)
-- Diagnóstico financiero mensual automatizado con IA
-- Multi-negocio / multi-sede
-- Roles y permisos (admin / cajero)
-- Reportes con marca propia del negocio
+Los beneficios de un negocio los define el plan de **su dueño**; las personas invitadas los heredan.
+Los límites los aplica el servidor (`functions/src/plans.ts`); `web/src/types/pinak.ts` solo los refleja en pantalla.
 
-> **Nota**: se eligió Gemini (en vez de Claude) para esta fase por su nivel
-> gratuito real. La Cloud Function está aislada del resto del código
-> (`functions/src/index.ts`), así que cambiar de proveedor de IA más adelante
-> es un cambio acotado.
+### Orden de despliegue (importante)
+
+1. `firebase deploy --only functions` — primero, para que existan `ensureBusiness` y el resto.
+2. `firebase deploy --only firestore:rules`
+3. Publicar la web (`npm run deploy:hosting` o `git push` si usas Vercel).
 
 ## Configuración de Firebase
 
-Proyecto: **pinak-cd2e4**
+Proyecto: **pinak-dev**
 
 1. Firebase Console → Authentication → Sign-in method → activa **Email/Password**
    y **Google**.
@@ -164,13 +166,13 @@ usando [Bold](https://bold.co) (pasarela colombiana — Nequi, PSE, tarjetas).
    cd web && npm run build && cd ..
    firebase deploy --only hosting
    ```
-   Esto la publica en `https://pinak-cd2e4.web.app` (o el dominio que
+   Esto la publica en `https://pinak-dev.web.app` (o el dominio que
    configures). Si usas un dominio distinto, actualiza la constante
    `BOLD_REDIRECT_URL` en `mobile/src/lib/payments.ts`.
 6. En el panel de Bold (Webhooks), registra la URL que te dio Firebase tras
    el deploy de functions:
    ```
-   https://us-central1-pinak-cd2e4.cloudfunctions.net/boldWebhook
+   https://us-central1-pinak-dev.cloudfunctions.net/boldWebhook
    ```
 
 **Roadmap pendiente** (no implementado aún):

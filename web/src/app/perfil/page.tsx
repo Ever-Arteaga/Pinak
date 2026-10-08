@@ -4,20 +4,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthUser } from "@/lib/auth";
-import { useUserProfile, updateBusinessProfile } from "@/lib/userProfile";
+import { useBusiness, updateBusinessProfile } from "@/lib/business";
+import { useBusinessGate } from "@/components/BusinessGate";
 import { AppHeader } from "@/components/AppHeader";
-import { BUSINESS_TYPES, PLAN_LIMITS } from "@/types/pinak";
-
-const NOMBRES_PLAN: Record<string, string> = {
-  emprendedor: "Emprendedor",
-  pro: "Pro",
-  premium: "Premium",
-};
+import { BUSINESS_TYPES, PLAN_LIMITS, PLAN_NAMES } from "@/types/pinak";
 
 export default function PerfilEmpresaPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuthUser();
-  const { profile, loading: profileLoading } = useUserProfile(user?.uid);
+  const { business, isOwner } = useBusiness();
 
   const [businessName, setBusinessName] = useState("");
   const [businessType, setBusinessType] = useState("");
@@ -36,24 +31,21 @@ export default function PerfilEmpresaPage() {
     }
   }, [authLoading, user, router]);
 
-  // Carga los datos guardados en el formulario cuando llegan de Firestore
+  // Carga en el formulario los datos guardados del negocio activo.
+  const saved = business;
   useEffect(() => {
-    if (!profile) return;
-    setBusinessName(profile.businessName);
-    setBusinessType(profile.businessType);
-    setPhone(profile.phone);
-    setCity(profile.city);
-    setNit(profile.nit);
-    setDescription(profile.description);
-  }, [profile]);
+    if (!saved) return;
+    setBusinessName(saved.name);
+    setBusinessType(saved.businessType);
+    setPhone(saved.phone);
+    setCity(saved.city);
+    setNit(saved.nit);
+    setDescription(saved.description);
+  }, [saved?.id, saved?.name, saved?.businessType, saved?.phone, saved?.city, saved?.nit, saved?.description]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (authLoading || !user || profileLoading || !profile) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-cream">
-        <p className="text-sm text-ink-soft">Cargando...</p>
-      </main>
-    );
-  }
+  const gate = useBusinessGate();
+  if (gate) return gate;
+  const biz = business!;
 
   async function handleGuardar(e: React.FormEvent) {
     e.preventDefault();
@@ -67,8 +59,8 @@ export default function PerfilEmpresaPage() {
 
     setGuardando(true);
     try {
-      await updateBusinessProfile(user!.uid, {
-        businessName: businessName.trim(),
+      await updateBusinessProfile(biz.id, {
+        name: businessName.trim(),
         businessType,
         phone: phone.trim(),
         city: city.trim(),
@@ -85,8 +77,8 @@ export default function PerfilEmpresaPage() {
   }
 
   const iniciales = (businessName || "?").trim().slice(0, 2).toUpperCase();
-  const miembroDesde = profile.createdAt
-    ? profile.createdAt.toLocaleDateString("es-CO", { month: "long", year: "numeric" })
+  const miembroDesde = biz.createdAt
+    ? biz.createdAt.toLocaleDateString("es-CO", { month: "long", year: "numeric" })
     : null;
 
   return (
@@ -103,17 +95,17 @@ export default function PerfilEmpresaPage() {
             <h1 className="font-display truncate text-base font-semibold text-navy-900">
               {businessName || "Tu negocio"}
             </h1>
-            <p className="truncate text-sm text-ink-soft">{profile.email}</p>
+            <p className="truncate text-sm text-ink-soft">{user?.email}</p>
           </div>
         </section>
 
         {/* Plan actual */}
         <section className="mt-4 flex items-center justify-between rounded-2xl border border-line bg-white p-5">
           <div>
-            <p className="text-xs uppercase tracking-wide text-ink-soft">Plan actual</p>
+            <p className="text-xs uppercase tracking-wide text-ink-soft">Plan del negocio</p>
             <p className="font-display mt-0.5 text-sm font-semibold text-navy-900">
-              {NOMBRES_PLAN[profile.plan]}
-              {PLAN_LIMITS[profile.plan].priceCOP > 0 && (
+              {PLAN_NAMES[biz.plan]}
+              {PLAN_LIMITS[biz.plan].priceCOP > 0 && (
                 <span className="font-normal text-ink-soft">
                   {" "}
                   ·{" "}
@@ -121,7 +113,7 @@ export default function PerfilEmpresaPage() {
                     style: "currency",
                     currency: "COP",
                     maximumFractionDigits: 0,
-                  }).format(PLAN_LIMITS[profile.plan].priceCOP)}
+                  }).format(PLAN_LIMITS[biz.plan].priceCOP)}
                   /mes
                 </span>
               )}
@@ -130,12 +122,14 @@ export default function PerfilEmpresaPage() {
               <p className="mt-0.5 text-xs text-ink-soft">Miembro desde {miembroDesde}</p>
             )}
           </div>
-          <Link
-            href="/upgrade"
-            className="whitespace-nowrap rounded-lg border border-line px-3 py-2 text-xs font-semibold text-navy-900 transition hover:bg-cream"
-          >
-            Cambiar plan
-          </Link>
+          {isOwner && (
+            <Link
+              href="/upgrade"
+              className="whitespace-nowrap rounded-lg border border-line px-3 py-2 text-xs font-semibold text-navy-900 transition hover:bg-cream"
+            >
+              Cambiar plan
+            </Link>
+          )}
         </section>
 
         {/* Formulario de datos de la empresa */}
@@ -146,6 +140,12 @@ export default function PerfilEmpresaPage() {
           <h2 className="font-display text-sm font-semibold text-navy-900">
             Datos del negocio
           </h2>
+          {!isOwner && (
+            <p className="rounded-lg bg-cream px-3 py-2 text-xs text-ink-soft">
+              Solo el dueño del negocio puede editar estos datos.
+            </p>
+          )}
+          <fieldset disabled={!isOwner} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="businessName" className="text-sm font-medium text-ink">
@@ -254,6 +254,7 @@ export default function PerfilEmpresaPage() {
           >
             {guardando ? "Guardando..." : "Guardar cambios"}
           </button>
+          </fieldset>
         </form>
       </div>
     </main>

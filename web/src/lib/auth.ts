@@ -4,6 +4,7 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   onAuthStateChanged,
+  sendEmailVerification,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -13,7 +14,14 @@ import {
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { auth, db } from "./firebase";
-import { DEFAULT_CATEGORIES } from "@/types/pinak";
+import { ensureBusiness } from "./businessApi";
+
+// Mientras se registra una cuenta nueva, el proveedor de negocios espera: así el
+// primer negocio se crea con el nombre que la persona escribió.
+let bootstrapping = false;
+export function isAuthBootstrapping() {
+  return bootstrapping;
+}
 
 export function useAuthUser() {
   const [user, setUser] = useState<User | null>(null);
@@ -43,16 +51,6 @@ async function ensureUserDocument(uid: string, email: string, businessName: stri
     createdAt: serverTimestamp(),
     privacyModeEnabled: false,
   });
-
-  await Promise.all(
-    DEFAULT_CATEGORIES.map((cat, index) =>
-      setDoc(doc(db, "users", uid, "categories", `default-${index}`), {
-        ...cat,
-        isDefault: true,
-        createdAt: serverTimestamp(),
-      })
-    )
-  );
 }
 
 export async function registerUser(
@@ -60,10 +58,20 @@ export async function registerUser(
   password: string,
   businessName: string
 ) {
-  const credential = await createUserWithEmailAndPassword(auth, email, password);
-  await updateProfile(credential.user, { displayName: businessName });
-  await ensureUserDocument(credential.user.uid, email, businessName);
-  return credential.user;
+  bootstrapping = true;
+  try {
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(credential.user, { displayName: businessName });
+    await ensureUserDocument(credential.user.uid, email, businessName);
+    // Necesario para poder aceptar invitaciones a otros negocios. Si falla, no es grave.
+    sendEmailVerification(credential.user).catch(() => {});
+    // Si crear el primer negocio falla (red, funciones sin desplegar), la cuenta ya existe:
+    // el proveedor de negocios lo reintenta y ofrece un botón "Reintentar".
+    await ensureBusiness({ businessName }).catch(() => {});
+    return credential.user;
+  } finally {
+    bootstrapping = false;
+  }
 }
 
 export async function loginUser(email: string, password: string) {
@@ -72,11 +80,19 @@ export async function loginUser(email: string, password: string) {
 }
 
 export async function loginWithGoogle() {
-  const provider = new GoogleAuthProvider();
-  const credential = await signInWithPopup(auth, provider);
-  const businessName = credential.user.displayName || "Mi negocio";
-  await ensureUserDocument(credential.user.uid, credential.user.email ?? "", businessName);
-  return credential.user;
+  bootstrapping = true;
+  try {
+    const provider = new GoogleAuthProvider();
+    const credential = await signInWithPopup(auth, provider);
+    const businessName = credential.user.displayName || "Mi negocio";
+    await ensureUserDocument(credential.user.uid, credential.user.email ?? "", businessName);
+    // Si crear el primer negocio falla (red, funciones sin desplegar), la cuenta ya existe:
+    // el proveedor de negocios lo reintenta y ofrece un botón "Reintentar".
+    await ensureBusiness({ businessName }).catch(() => {});
+    return credential.user;
+  } finally {
+    bootstrapping = false;
+  }
 }
 
 export async function logoutUser() {

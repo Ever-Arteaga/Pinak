@@ -15,16 +15,16 @@ const currency = new Intl.NumberFormat("es-CO", {
 
 const PLAN_FEATURES: Record<"pro" | "premium", string[]> = {
   pro: [
-    "Registro por voz/texto con IA — ilimitado",
-    "Hasta 2 usuarios",
-    "Fiados y cobro por WhatsApp",
-    "Reportes en PDF y Excel",
+    "Registro por voz y texto con IA, sin límite",
+    "2 usuarios en tu negocio (tú y una persona más)",
+    "Reportes exportables a PDF y Excel",
   ],
   premium: [
     "Todo lo de Pro",
-    "Usuarios y negocios ilimitados",
-    "Modo privacidad en pantalla",
+    "Usuarios ilimitados en cada negocio",
+    "Varios negocios en una sola cuenta",
     "Diagnóstico financiero mensual con IA",
+    "Modo privacidad en pantalla",
     "Soporte prioritario",
   ],
 };

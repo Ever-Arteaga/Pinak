@@ -27,7 +27,7 @@ function MicIcon() {
   );
 }
 
-export function AiQuickAddModal({ userId, onClose }: { userId: string; onClose: () => void }) {
+export function AiQuickAddModal({ businessId, onClose }: { businessId: string; onClose: () => void }) {
   const [step, setStep] = useState<Step>("input");
   const [text, setText] = useState("");
   const [candidates, setCandidates] = useState<AiParsedTransaction[]>([]);
@@ -72,7 +72,7 @@ export function AiQuickAddModal({ userId, onClose }: { userId: string; onClose: 
     setProcessing(true);
     setError(null);
     try {
-      const result = await parseTransactionText(text.trim());
+      const result = await parseTransactionText(text.trim(), businessId);
       if (result.transactions.length === 0) {
         setError(
           "No pude identificar ningún movimiento en ese mensaje. Intenta ser más específico (monto, si fue ingreso o gasto)."
@@ -95,7 +95,7 @@ export function AiQuickAddModal({ userId, onClose }: { userId: string; onClose: 
     try {
       await Promise.all(
         candidates.map((c) =>
-          addTransaction(userId, {
+          addTransaction(businessId, {
             type: c.type,
             amount: c.amount,
             category: c.category,

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useAuthUser } from "@/lib/auth";
 import { usePrivacy } from "@/lib/privacy";
 import {
   buildWhatsAppCollectionLink,
@@ -10,16 +9,20 @@ import {
 } from "@/lib/receivables";
 import { AddReceivableModal } from "@/components/AddReceivableModal";
 import { AppHeader } from "@/components/AppHeader";
+import { useBusiness } from "@/lib/business";
+import { useBusinessGate } from "@/components/BusinessGate";
 import type { Receivable } from "@/types/pinak";
 
 export default function ReceivablesPage() {
-  const { user } = useAuthUser();
+  const { business } = useBusiness();
   const { money } = usePrivacy();
-  const { receivables, loading } = useReceivables(user?.uid);
+  const { receivables, loading } = useReceivables(business?.id);
   const [showModal, setShowModal] = useState(false);
   const [editingReceivable, setEditingReceivable] = useState<Receivable | null>(null);
 
-  if (!user) return null;
+  const gate = useBusinessGate();
+  if (gate) return gate;
+  const biz = business!;
 
   const pendientes = receivables.filter((r) => r.status !== "pagado");
   const totalPendiente = pendientes.reduce((sum, r) => sum + r.amount, 0);
@@ -96,7 +99,7 @@ export default function ReceivablesPage() {
                   <div className="mt-3 flex gap-2">
                     <a
                       href={buildWhatsAppCollectionLink(
-                        user.displayName || "tu negocio",
+                        biz.name,
                         r
                       )}
                       target="_blank"
@@ -106,7 +109,7 @@ export default function ReceivablesPage() {
                       Cobrar por WhatsApp
                     </a>
                     <button
-                      onClick={() => markReceivableAsPaid(user.uid, r.id)}
+                      onClick={() => markReceivableAsPaid(biz.id, r.id)}
                       className="rounded-lg border border-line px-3 py-2 text-xs font-semibold text-navy-900 transition hover:bg-green-100"
                     >
                       Marcar pagado
@@ -120,12 +123,12 @@ export default function ReceivablesPage() {
       </div>
 
       {showModal && (
-        <AddReceivableModal userId={user.uid} onClose={() => setShowModal(false)} />
+        <AddReceivableModal businessId={biz.id} onClose={() => setShowModal(false)} />
       )}
 
       {editingReceivable && (
         <AddReceivableModal
-          userId={user.uid}
+          businessId={biz.id}
           editingReceivable={editingReceivable}
           onClose={() => setEditingReceivable(null)}
         />

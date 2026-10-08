@@ -6,11 +6,11 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import type { Receivable } from "@/types/pinak";
 
 export function AddReceivableModal({
-  userId,
+  businessId,
   editingReceivable,
   onClose,
 }: {
-  userId: string;
+  businessId: string;
   editingReceivable?: Receivable;
   onClose: () => void;
 }) {
@@ -36,9 +36,9 @@ export function AddReceivableModal({
     try {
       const payload = { clientName, clientPhone, amount: numericAmount };
       if (isEditing && editingReceivable) {
-        await updateReceivable(userId, editingReceivable.id, payload);
+        await updateReceivable(businessId, editingReceivable.id, payload);
       } else {
-        await addReceivable(userId, payload);
+        await addReceivable(businessId, payload);
       }
       onClose();
     } catch (err) {
@@ -56,7 +56,7 @@ export function AddReceivableModal({
     setDeleting(true);
     setError(null);
     try {
-      await deleteReceivable(userId, editingReceivable.id);
+      await deleteReceivable(businessId, editingReceivable.id);
       onClose();
     } catch (err) {
       console.error("Error al eliminar fiado:", err);

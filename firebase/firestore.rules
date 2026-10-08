@@ -3,16 +3,33 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
-    }
-
     function isSignedIn() {
       return request.auth != null;
     }
 
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Documento del negocio (la app lo lee para saber quién pertenece a él).
+    function businessData(businessId) {
+      return get(/databases/$(database)/documents/businesses/$(businessId)).data;
+    }
+
+    // Puede trabajar con los datos de un negocio quien es miembro Y el negocio
+    // no está bloqueado por vencimiento del plan de su dueño.
+    function canAccess(businessId) {
+      return isSignedIn()
+        && request.auth.uid in businessData(businessId).memberIds
+        && businessData(businessId).get('locked', false) == false;
+    }
+
     // ---------------------------------------------------------
-    // USERS - perfil del usuario / negocio
+    // USERS - cuenta de la persona (perfil, plan, preferencias)
+    // El plan, su vencimiento y todo lo demás solo lo escriben las Cloud
+    // Functions. Desde la app únicamente se pueden cambiar los campos de
+    // la lista (antes solo se protegía "plan", y un usuario podía extender
+    // su vencimiento editando "planExpiresAt").
     // ---------------------------------------------------------
     match /users/{userId} {
       allow read: if isOwner(userId);
@@ -20,67 +37,89 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll(['email', 'businessName', 'plan', 'createdAt'])
         && request.resource.data.plan == 'emprendedor';
       allow update: if isOwner(userId)
-        && (!('plan' in request.resource.data.diff(resource.data).affectedKeys())
-            || request.resource.data.plan == resource.data.plan);
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['businessName', 'businessType', 'phone', 'city', 'nit', 'description', 'privacyModeEnabled']);
       allow delete: if false;
 
-      // -------------------------------------------------------
-      // TRANSACTIONS (ingresos / egresos)
-      // -------------------------------------------------------
-      match /transactions/{transactionId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId)
-          && request.resource.data.keys().hasAll(['type', 'amount', 'category', 'method', 'date'])
-          && request.resource.data.type in ['ingreso', 'egreso']
-          && request.resource.data.amount is number
-          && request.resource.data.amount > 0;
-        allow update: if isOwner(userId);
-        allow delete: if isOwner(userId);
-      }
-
-      // -------------------------------------------------------
-      // CATEGORIES
-      // -------------------------------------------------------
-      match /categories/{categoryId} {
-        allow read: if isOwner(userId);
-        allow create, update, delete: if isOwner(userId);
-      }
-
-      // -------------------------------------------------------
-      // RECEIVABLES (fiados / cuentas por cobrar)
-      // -------------------------------------------------------
-      match /receivables/{receivableId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId)
-          && request.resource.data.keys().hasAll(['clientName', 'amount', 'status'])
-          && request.resource.data.amount is number
-          && request.resource.data.amount > 0
-          && request.resource.data.status == 'pendiente';
-        allow update: if isOwner(userId)
-          && request.resource.data.status in ['pendiente', 'pagado', 'vencido'];
-        allow delete: if isOwner(userId);
-      }
-
-      // -------------------------------------------------------
-      // USAGE - contador de uso mensual (límites del plan gratuito)
-      // -------------------------------------------------------
-      match /usage/{monthId} {
-        allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
-      }
-
-      // -------------------------------------------------------
-      // PAYMENTS - historial de pagos de Bold
-      // Solo lectura desde el cliente. La escritura la hace exclusivamente
-      // el webhook de Bold (Cloud Function con Admin SDK, que ignora estas
-      // reglas), nunca el usuario directamente.
-      // -------------------------------------------------------
+      // PAYMENTS - historial de pagos de Bold.
+      // Solo lectura desde el cliente: lo escribe únicamente el webhook de Bold
+      // (Cloud Function con Admin SDK, que ignora estas reglas).
       match /payments/{paymentId} {
         allow read: if isOwner(userId);
         allow write: if false;
       }
     }
 
+    // ---------------------------------------------------------
+    // BUSINESSES - un negocio con su equipo
+    // Se crean y se administran sus miembros solo desde Cloud Functions
+    // (ahí se aplican los límites de cada plan). El dueño puede editar
+    // únicamente los datos descriptivos del negocio.
+    // ---------------------------------------------------------
+    match /businesses/{businessId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.memberIds;
+      allow create, delete: if false;
+      allow update: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'businessType', 'phone', 'city', 'nit', 'description']);
+
+      match /transactions/{transactionId} {
+        allow read: if canAccess(businessId);
+        allow create: if canAccess(businessId)
+          && request.resource.data.keys().hasAll(['type', 'amount', 'category', 'method', 'date'])
+          && request.resource.data.type in ['ingreso', 'egreso']
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0;
+        allow update: if canAccess(businessId)
+          && request.resource.data.type in ['ingreso', 'egreso']
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0;
+        allow delete: if canAccess(businessId);
+      }
+
+      match /categories/{categoryId} {
+        allow read, create, update, delete: if canAccess(businessId);
+      }
+
+      match /receivables/{receivableId} {
+        allow read: if canAccess(businessId);
+        allow create: if canAccess(businessId)
+          && request.resource.data.keys().hasAll(['clientName', 'amount', 'status'])
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0
+          && request.resource.data.status == 'pendiente';
+        allow update: if canAccess(businessId)
+          && request.resource.data.status in ['pendiente', 'pagado', 'vencido'];
+        allow delete: if canAccess(businessId);
+      }
+
+      // Contador de uso de la IA y diagnósticos: solo lectura para el equipo,
+      // los escriben las Cloud Functions.
+      match /usage/{monthId} {
+        allow read: if canAccess(businessId);
+        allow write: if false;
+      }
+      match /diagnostics/{monthId} {
+        allow read: if canAccess(businessId);
+        allow write: if false;
+      }
+    }
+
+    // ---------------------------------------------------------
+    // INVITATIONS - invitaciones para unirse a un negocio
+    // La persona invitada las ve solo con su correo VERIFICADO; quien invitó
+    // ve las que envió. Se crean, aceptan y cancelan desde Cloud Functions.
+    // ---------------------------------------------------------
+    match /invitations/{invitationId} {
+      allow read: if isSignedIn()
+        && ((request.auth.token.email_verified == true
+              && resource.data.email == request.auth.token.email.lower())
+            || resource.data.invitedByUid == request.auth.uid);
+      allow write: if false;
+    }
+
+    // CHECKOUT INTENTS y cualquier otra colección: solo servidor.
     match /{document=**} {
       allow read, write: if false;
     }

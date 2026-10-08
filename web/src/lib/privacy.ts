@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { db } from "./firebase";
 import { useAuthUser } from "./auth";
 import { useUserProfile } from "./userProfile";
+import { useBusiness } from "./business";
 import { PLAN_LIMITS } from "@/types/pinak";
 
 const currency = new Intl.NumberFormat("es-CO", {
@@ -35,6 +36,7 @@ export async function setPrivacyMode(userId: string, enabled: boolean) {
 export function usePrivacy() {
   const { user } = useAuthUser();
   const { profile } = useUserProfile(user?.uid);
+  const { business } = useBusiness();
   const [hint, setHint] = useState(false);
 
   useEffect(() => {
@@ -45,7 +47,10 @@ export function usePrivacy() {
     }
   }, []);
 
-  const available = profile ? PLAN_LIMITS[profile.plan].privacyMode : false;
+  // La disponibilidad sigue al plan del negocio que se está viendo (el de su dueño);
+  // mientras carga, se usa el plan propio de la cuenta.
+  const plan = business?.plan ?? profile?.plan;
+  const available = plan ? PLAN_LIMITS[plan].privacyMode : false;
   // Si el usuario bajó de Premium, la función deja de aplicarse sola.
   const enabled = profile ? available && profile.privacyModeEnabled : hint;
 

@@ -1,24 +1,14 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 import { GoogleGenAI } from "@google/genai";
+import { geminiApiKey, MODEL } from "./gemini";
+import { normalizePlan, PLAN_LIMITS } from "./plans";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 const db = admin.firestore();
-
-// La API key se guarda como secreto de Firebase (nunca en el código ni en el cliente).
-// Se configura una vez con: firebase functions:secrets:set GEMINI_API_KEY
-const geminiApiKey = defineSecret("GEMINI_API_KEY");
-
-// Se usa el alias "gemini-flash-latest" (en vez de un ID de modelo fijo como
-// "gemini-2.5-flash") porque Google retira modelos Flash específicos con el
-// tiempo — a veces antes de la fecha de apagado anunciada. El alias siempre
-// apunta al modelo Flash vigente con cuota gratuita, evitando que la función
-// deje de funcionar sola cuando Google rota su catálogo.
-const MODEL = "gemini-flash-latest";
 
 const VALID_METHODS = ["efectivo", "nequi", "daviplata", "tarjeta", "transferencia"];
 const VALID_TYPES = ["ingreso", "egreso"];
@@ -30,14 +20,6 @@ interface ParsedTransaction {
   method: string;
   description?: string;
 }
-
-// emprendedor: 0 = la IA no está disponible en el plan gratuito.
-// pro / premium: null = ilimitado.
-const PLAN_AI_LIMITS: Record<string, number | null> = {
-  emprendedor: 0,
-  pro: null,
-  premium: null,
-};
 
 function currentMonthId(): string {
   const now = new Date();
@@ -85,47 +67,44 @@ export const parseTransactionText = onCall(
       throw new HttpsError("invalid-argument", "El mensaje es demasiado largo.");
     }
 
-    const userRef = db.collection("users").doc(uid);
-    const userSnap = await userRef.get();
-    if (!userSnap.exists) {
-      throw new HttpsError("not-found", "No se encontró tu perfil de usuario.");
+    // El plan que cuenta es el del NEGOCIO (el de su dueño): las personas
+    // invitadas heredan los beneficios dentro de ese negocio.
+    const businessId = String(request.data?.businessId ?? uid).trim();
+    const bizRef = db.collection("businesses").doc(businessId);
+    const bizSnap = await bizRef.get();
+    if (!bizSnap.exists) {
+      throw new HttpsError("not-found", "No se encontró el negocio.");
     }
-    const plan = (userSnap.data()?.plan as string) ?? "emprendedor";
-    const limit = PLAN_AI_LIMITS[plan] ?? PLAN_AI_LIMITS.emprendedor;
-
-    if (limit === 0) {
+    const biz = bizSnap.data()!;
+    if (!((biz.memberIds ?? []) as string[]).includes(uid)) {
+      throw new HttpsError("permission-denied", "No eres parte de este negocio.");
+    }
+    if (biz.locked === true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Este negocio está bloqueado porque su plan venció. Pídele al dueño que lo renueve."
+      );
+    }
+    if (!PLAN_LIMITS[normalizePlan(biz.plan)].ai) {
       throw new HttpsError(
         "permission-denied",
         "El registro con IA está disponible en los planes Pro y Premium. Mejora tu plan para usarlo."
       );
     }
 
-    const monthId = currentMonthId();
-    const usageRef = userRef.collection("usage").doc(monthId);
-
-    const usageAfter = await db.runTransaction(async (tx) => {
-      const usageSnap = await tx.get(usageRef);
-      const used = (usageSnap.data()?.aiRegistrationsUsed as number) ?? 0;
-
-      if (limit !== null && used >= limit) {
-        throw new HttpsError(
-          "resource-exhausted",
-          `Alcanzaste el límite de ${limit} registros con IA de tu plan este mes. Mejora tu plan para uso ilimitado.`
-        );
-      }
-
-      const newUsed = used + 1;
-      tx.set(
-        usageRef,
-        {
-          aiRegistrationsUsed: newUsed,
-          aiRegistrationsLimit: limit,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-      return { used: newUsed, limit };
-    });
+    // Contador de uso (informativo: Pro y Premium son ilimitados).
+    const usageRef = bizRef.collection("usage").doc(currentMonthId());
+    const usageSnap = await usageRef.get();
+    const used = ((usageSnap.data()?.aiRegistrationsUsed as number) ?? 0) + 1;
+    await usageRef.set(
+      {
+        aiRegistrationsUsed: used,
+        aiRegistrationsLimit: null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    const usageAfter = { used, limit: null as number | null };
 
     const ai = new GoogleGenAI({ apiKey: geminiApiKey.value() });
 
@@ -179,3 +158,13 @@ export const parseTransactionText = onCall(
 );
 
 export { createBoldCheckout, boldWebhook, downgradeExpiredPlans } from "./payments";
+export {
+  ensureBusiness,
+  createBusiness,
+  inviteMember,
+  acceptInvite,
+  declineInvite,
+  cancelInvite,
+  removeMember,
+} from "./businesses";
+export { generateDiagnosis } from "./diagnosis";

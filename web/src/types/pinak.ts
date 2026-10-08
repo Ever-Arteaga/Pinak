@@ -82,15 +82,110 @@ export const DEFAULT_CATEGORIES: Array<Pick<Category, "name" | "type" | "icon">>
 ];
 
 export interface PlanConfig {
-  users: number;
+  users: number; // usuarios por negocio, incluyendo al dueño
+  businesses: number; // negocios que puede tener la cuenta
   aiEnabled: boolean;
   aiRegistrationsPerMonth: number | null; // null = ilimitado
-  privacyMode: boolean; // oculta montos en pantalla (solo Premium)
+  exports: boolean; // exportar reportes a PDF y Excel
+  diagnosis: boolean; // diagnóstico financiero mensual con IA
+  privacyMode: boolean; // oculta montos en pantalla
   priceCOP: number;
 }
 
+// Estos límites deben coincidir con functions/src/plans.ts, que es quien los aplica de verdad.
 export const PLAN_LIMITS: Record<Plan, PlanConfig> = {
-  emprendedor: { users: 1, aiEnabled: false, aiRegistrationsPerMonth: 0, privacyMode: false, priceCOP: 0 },
-  pro: { users: 2, aiEnabled: true, aiRegistrationsPerMonth: null, privacyMode: false, priceCOP: 39900 },
-  premium: { users: Infinity, aiEnabled: true, aiRegistrationsPerMonth: null, privacyMode: true, priceCOP: 69900 },
+  emprendedor: {
+    users: 1, businesses: 1, aiEnabled: false, aiRegistrationsPerMonth: 0,
+    exports: false, diagnosis: false, privacyMode: false, priceCOP: 0,
+  },
+  pro: {
+    users: 2, businesses: 1, aiEnabled: true, aiRegistrationsPerMonth: null,
+    exports: true, diagnosis: false, privacyMode: false, priceCOP: 39900,
+  },
+  premium: {
+    users: Infinity, businesses: Infinity, aiEnabled: true, aiRegistrationsPerMonth: null,
+    exports: true, diagnosis: true, privacyMode: true, priceCOP: 69900,
+  },
 };
+
+export const PLAN_NAMES: Record<Plan, string> = {
+  emprendedor: "Emprendedor",
+  pro: "Pro",
+  premium: "Premium",
+};
+
+// ---------------------------------------------------------------------------
+// Negocios y equipos
+// ---------------------------------------------------------------------------
+export type BusinessRole = "owner" | "member";
+
+export interface BusinessMember {
+  uid: string;
+  role: BusinessRole;
+  email: string;
+  joinedAt: Date | null;
+}
+
+export interface Business {
+  id: string;
+  name: string;
+  businessType: string;
+  phone: string;
+  city: string;
+  nit: string;
+  description: string;
+  ownerId: string;
+  plan: Plan; // plan del DUEÑO: lo heredan todas las personas del negocio
+  locked: boolean; // true si el plan del dueño venció y este negocio ya no cabe
+  members: BusinessMember[];
+  createdAt: Date | null;
+}
+
+export interface Invitation {
+  id: string;
+  businessId: string;
+  businessName: string;
+  email: string;
+  invitedByEmail: string;
+  status: "pendiente" | "aceptada" | "rechazada";
+}
+
+// ---------------------------------------------------------------------------
+// Diagnóstico financiero
+// ---------------------------------------------------------------------------
+export interface CategoryShare {
+  category: string;
+  amount: number;
+  pct: number;
+}
+
+export interface DiagnosisStats {
+  month: string;
+  income: number;
+  expenses: number;
+  balance: number;
+  marginPct: number | null;
+  txCount: number;
+  topExpenseCategories: CategoryShare[];
+  topIncomeCategories: CategoryShare[];
+  previous: { income: number; expenses: number; balance: number } | null;
+  change: { incomePct: number | null; expensesPct: number | null } | null;
+  receivables: {
+    pendingCount: number;
+    pendingTotal: number;
+    overdueCount: number;
+    overdueTotal: number;
+    oldestOverdueDays: number | null;
+  };
+}
+
+export interface Diagnosis {
+  month: string;
+  resumen: string;
+  hallazgos: string[];
+  recomendaciones: string[];
+  alerta: string | null;
+  stats: DiagnosisStats;
+  generationCount: number;
+  generatedAt: Date | null;
+}
