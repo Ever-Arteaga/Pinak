@@ -85,7 +85,7 @@ export default function PerfilEmpresaPage() {
     <main className="min-h-screen bg-cream pb-24">
       <AppHeader backHref="/dashboard" title="Perfil de la empresa" />
 
-      <div className="mx-auto max-w-md px-5 pt-6">
+      <div className="mx-auto w-full max-w-md px-5 pt-6 md:max-w-2xl md:px-8 lg:max-w-4xl">
         {/* Cabecera del negocio */}
         <section className="flex items-center gap-4 rounded-2xl border border-line bg-white p-5">
           <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-navy-900 text-lg font-semibold text-white">

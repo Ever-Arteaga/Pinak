@@ -4,7 +4,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
 import Constants from "expo-constants";
 import { signInWithGoogleIdToken } from "../lib/auth";
-import { colors } from "../theme";
+import { colors, themedStyles } from "../theme";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -45,7 +45,7 @@ export function GoogleSignInButton({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   button: {
     borderWidth: 1,
     borderColor: colors.line,
@@ -55,4 +55,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   text: { color: colors.ink, fontWeight: "700", fontSize: 14 },
-});
+}));

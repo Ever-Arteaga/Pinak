@@ -2,6 +2,8 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   onAuthStateChanged,
+  sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
   signOut,
@@ -11,7 +13,14 @@ import {
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { auth, db } from "./firebase";
-import { DEFAULT_CATEGORIES } from "../types/pinak";
+import { ensureBusiness } from "./businessApi";
+
+// Mientras se registra una cuenta nueva, el proveedor de negocios espera para crear
+// el primer negocio con el nombre que la persona escribió.
+let bootstrapping = false;
+export function isAuthBootstrapping() {
+  return bootstrapping;
+}
 
 export function useAuthUser() {
   const [user, setUser] = useState<User | null>(null);
@@ -41,27 +50,20 @@ async function ensureUserDocument(uid: string, email: string, businessName: stri
     createdAt: serverTimestamp(),
     privacyModeEnabled: false,
   });
-
-  await Promise.all(
-    DEFAULT_CATEGORIES.map((cat, index) =>
-      setDoc(doc(db, "users", uid, "categories", `default-${index}`), {
-        ...cat,
-        isDefault: true,
-        createdAt: serverTimestamp(),
-      })
-    )
-  );
 }
 
-export async function registerUser(
-  email: string,
-  password: string,
-  businessName: string
-) {
-  const credential = await createUserWithEmailAndPassword(auth, email, password);
-  await updateProfile(credential.user, { displayName: businessName });
-  await ensureUserDocument(credential.user.uid, email, businessName);
-  return credential.user;
+export async function registerUser(email: string, password: string, businessName: string) {
+  bootstrapping = true;
+  try {
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(credential.user, { displayName: businessName });
+    await ensureUserDocument(credential.user.uid, email, businessName);
+    sendEmailVerification(credential.user).catch(() => {});
+    await ensureBusiness({ businessName }).catch(() => {});
+    return credential.user;
+  } finally {
+    bootstrapping = false;
+  }
 }
 
 export async function loginUser(email: string, password: string) {
@@ -70,11 +72,23 @@ export async function loginUser(email: string, password: string) {
 }
 
 export async function signInWithGoogleIdToken(idToken: string) {
-  const credential = GoogleAuthProvider.credential(idToken);
-  const result = await signInWithCredential(auth, credential);
-  const businessName = result.user.displayName || "Mi negocio";
-  await ensureUserDocument(result.user.uid, result.user.email ?? "", businessName);
-  return result.user;
+  bootstrapping = true;
+  try {
+    const credential = GoogleAuthProvider.credential(idToken);
+    const result = await signInWithCredential(auth, credential);
+    const businessName = result.user.displayName || "Mi negocio";
+    await ensureUserDocument(result.user.uid, result.user.email ?? "", businessName);
+    await ensureBusiness({ businessName }).catch(() => {});
+    return result.user;
+  } finally {
+    bootstrapping = false;
+  }
+}
+
+/** Envía el correo para restablecer la contraseña (en español). */
+export async function sendPasswordReset(email: string) {
+  auth.languageCode = "es";
+  await sendPasswordResetEmail(auth, email.trim());
 }
 
 export async function logoutUser() {

@@ -6,7 +6,7 @@ import {
   buildBoldCheckoutHtml,
   type BoldCheckoutData,
 } from "../lib/payments";
-import { colors } from "../theme";
+import { colors, themedStyles } from "../theme";
 
 /**
  * Modal de pantalla completa que carga el checkout de Bold dentro de un
@@ -62,7 +62,7 @@ export function BoldCheckoutModal({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   header: {
     flexDirection: "row",
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.line,
   },
-  title: { fontSize: 16, fontWeight: "700", color: colors.navy900 },
+  title: { fontSize: 16, fontWeight: "700", color: colors.title },
   close: { fontSize: 16, color: colors.inkSoft },
   webview: { flex: 1 },
   loadingOverlay: {
@@ -86,4 +86,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.cream,
   },
-});
+}));

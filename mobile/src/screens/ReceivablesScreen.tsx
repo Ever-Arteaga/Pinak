@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useAuthUser } from "../lib/auth";
+import { useBusiness } from "../lib/business";
+import { useBusinessGate } from "../components/BusinessGate";
+import { usePrivacy } from "../lib/privacy";
 import {
   markReceivableAsPaid,
   openWhatsAppCollection,
@@ -8,7 +10,7 @@ import {
 } from "../lib/receivables";
 import { AddReceivableModal } from "../components/AddReceivableModal";
 import { AppHeader } from "../components/AppHeader";
-import { colors } from "../theme";
+import { colors, themedStyles } from "../theme";
 import type { Receivable } from "../types/pinak";
 
 const currency = new Intl.NumberFormat("es-CO", {
@@ -18,16 +20,19 @@ const currency = new Intl.NumberFormat("es-CO", {
 });
 
 export default function ReceivablesScreen({ onBack }: { onBack: () => void }) {
-  const { user } = useAuthUser();
-  const { receivables, loading } = useReceivables(user?.uid);
+  const { business } = useBusiness();
+  const { money } = usePrivacy();
+  const { receivables, loading } = useReceivables(business?.id);
   const [showModal, setShowModal] = useState(false);
   const [editingReceivable, setEditingReceivable] = useState<Receivable | null>(null);
 
-  if (!user) return null;
+  const gate = useBusinessGate();
+  if (gate) return gate;
+  const biz = business!;
 
   const pendientes = receivables.filter((r) => r.status !== "pagado");
   const totalPendiente = pendientes.reduce((sum, r) => sum + r.amount, 0);
-  const businessName = user.displayName || "tu negocio";
+  const businessName = biz.name;
 
   return (
     <View style={styles.container}>
@@ -41,7 +46,7 @@ export default function ReceivablesScreen({ onBack }: { onBack: () => void }) {
           <>
             <View style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>Total por cobrar</Text>
-              <Text style={styles.summaryValue}>{currency.format(totalPendiente)}</Text>
+              <Text style={styles.summaryValue}>{money(totalPendiente)}</Text>
               <Text style={styles.summarySub}>
                 {pendientes.length} {pendientes.length === 1 ? "fiado pendiente" : "fiados pendientes"}
               </Text>
@@ -65,7 +70,7 @@ export default function ReceivablesScreen({ onBack }: { onBack: () => void }) {
           <ReceivableRow
             item={item}
             onEdit={() => setEditingReceivable(item)}
-            onMarkPaid={() => markReceivableAsPaid(user.uid, item.id)}
+            onMarkPaid={() => markReceivableAsPaid(biz.id, item.id)}
             onCollect={() => openWhatsAppCollection(businessName, item)}
           />
         )}
@@ -73,7 +78,7 @@ export default function ReceivablesScreen({ onBack }: { onBack: () => void }) {
 
       <AddReceivableModal
         visible={showModal || Boolean(editingReceivable)}
-        userId={user.uid}
+        businessId={biz.id}
         editingReceivable={editingReceivable}
         onClose={() => {
           setShowModal(false);
@@ -123,12 +128,12 @@ function ReceivableRow({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.cream },
   listContent: { padding: 20, paddingBottom: 60 },
   summaryCard: { backgroundColor: colors.navy900, borderRadius: 16, padding: 20 },
   summaryLabel: { color: "rgba(255,255,255,0.7)", fontSize: 13 },
-  summaryValue: { color: colors.white, fontSize: 26, fontWeight: "700", marginTop: 4 },
+  summaryValue: { color: colors.onNavy, fontSize: 26, fontWeight: "700", marginTop: 4 },
   summarySub: { color: "rgba(255,255,255,0.6)", fontSize: 12, marginTop: 8 },
   addButton: {
     backgroundColor: colors.green600,
@@ -137,7 +142,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 14,
   },
-  addButtonText: { color: colors.white, fontWeight: "700", fontSize: 13 },
+  addButtonText: { color: colors.onNavy, fontWeight: "700", fontSize: 13 },
   sectionTitle: {
     fontSize: 12,
     fontWeight: "700",
@@ -159,7 +164,7 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   clientName: { fontSize: 14, fontWeight: "700", color: colors.ink },
   status: { fontSize: 12, color: colors.inkSoft, marginTop: 2 },
-  amount: { fontSize: 14, fontWeight: "700", color: colors.navy900 },
+  amount: { fontSize: 14, fontWeight: "700", color: colors.title },
   amountPaid: { color: colors.inkSoft, textDecorationLine: "line-through" },
   actionsRow: { flexDirection: "row", gap: 6, marginTop: 12 },
   whatsappButton: {
@@ -169,7 +174,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     alignItems: "center",
   },
-  whatsappButtonText: { color: colors.white, fontWeight: "700", fontSize: 12 },
+  whatsappButtonText: { color: colors.onNavy, fontWeight: "700", fontSize: 12 },
   secondaryButton: {
     flex: 1,
     borderWidth: 1,
@@ -179,5 +184,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: "center",
   },
-  secondaryButtonText: { color: colors.navy900, fontWeight: "700", fontSize: 12 },
-});
+  secondaryButtonText: { color: colors.title, fontWeight: "700", fontSize: 12 },
+}));

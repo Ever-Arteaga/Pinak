@@ -38,7 +38,7 @@ function LockedScreen({ isOwner, name }: { isOwner: boolean; name: string }) {
   return (
     <main className="min-h-screen bg-cream">
       <AppHeader title="Negocio bloqueado" />
-      <div className="mx-auto max-w-md px-5 pt-10 text-center">
+      <div className="mx-auto w-full max-w-md px-5 pt-10 text-center md:max-w-2xl">
         <p className="text-3xl" aria-hidden>
           🔒
         </p>

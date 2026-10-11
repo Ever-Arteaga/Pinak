@@ -74,7 +74,7 @@ export default function UpgradePage() {
     <main className="min-h-screen bg-cream pb-24">
       <AppHeader backHref="/dashboard" backLabel="Dashboard" title="Planes" />
 
-      <div className="mx-auto max-w-md px-5 pt-6">
+      <div className="mx-auto w-full max-w-md px-5 pt-6 md:max-w-2xl md:px-8 lg:max-w-4xl">
         <p className="text-center text-sm text-ink-soft">
           Tu plan actual:{" "}
           <span className="font-semibold text-navy-900">
@@ -102,7 +102,7 @@ export default function UpgradePage() {
           </p>
         )}
 
-        <div className="mt-6 flex flex-col gap-4">
+        <div className="mt-6 flex flex-col gap-4 md:grid md:grid-cols-2 md:items-start">
           {(["pro", "premium"] as const).map((plan) => {
             const isCurrent = profile?.plan === plan;
             return (

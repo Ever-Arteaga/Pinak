@@ -31,7 +31,7 @@ export default function ReceivablesPage() {
     <main className="min-h-screen bg-cream pb-24">
       <AppHeader backHref="/dashboard" backLabel="Dashboard" title="Fiados" />
 
-      <div className="mx-auto max-w-md px-5 pt-6">
+      <div className="mx-auto w-full max-w-md px-5 pt-6 md:max-w-2xl md:px-8 lg:max-w-4xl">
         <section className="rounded-2xl bg-navy-900 p-6 text-white shadow-sm">
           <p className="text-sm text-white/70">Total por cobrar</p>
           <p className="font-display mt-1 text-3xl font-semibold tracking-tight">
@@ -54,7 +54,7 @@ export default function ReceivablesPage() {
             Cuentas por cobrar
           </h2>
 
-          <div className="mt-3 flex flex-col gap-3">
+          <div className="mt-3 flex flex-col gap-3 lg:grid lg:grid-cols-2">
             {loading && (
               <p className="rounded-2xl border border-line bg-white px-4 py-6 text-center text-sm text-ink-soft">
                 Cargando fiados...

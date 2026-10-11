@@ -72,7 +72,8 @@ export default function DashboardPage() {
       {/* Header */}
       <AppHeader onLogout={() => logoutUser()} />
 
-      <div className="mx-auto max-w-md px-5 pt-6">
+      <div className="mx-auto w-full max-w-md px-5 pt-6 md:max-w-2xl md:px-8 lg:max-w-4xl">
+        <div className="grid gap-4 lg:grid-cols-2">
         {/* Tarjeta de balance total */}
         <section className="rounded-2xl bg-navy-900 p-6 text-white shadow-sm">
           <div className="flex items-center justify-between">
@@ -108,7 +109,7 @@ export default function DashboardPage() {
         </section>
 
         {/* Gráfica de ingresos vs egresos */}
-        <section className="mt-4 rounded-2xl border border-line bg-white p-5">
+        <section className="rounded-2xl border border-line bg-white p-5">
           <h2 className="font-display text-sm font-semibold text-navy-900">
             Últimos 7 días
           </h2>
@@ -116,6 +117,7 @@ export default function DashboardPage() {
             <BarChart data={datosGrafica} formatValue={(v) => money(v)} />
           </div>
         </section>
+        </div>
 
         <InvitationsBanner />
 

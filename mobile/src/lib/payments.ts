@@ -18,7 +18,7 @@ export interface BoldCheckoutData {
 // redirección empiece con https://, por eso no se puede usar un esquema
 // personalizado (pinak://) aquí — el WebView detecta esta URL para saber
 // cuándo cerrar y devolver el control a la app.
-export const BOLD_REDIRECT_URL = "https://pinak-cd2e4.web.app/upgrade/procesando/";
+export const BOLD_REDIRECT_URL = "https://pinak-dev.web.app/upgrade/procesando/";
 
 /** Pide a la Cloud Function los datos firmados del checkout de Bold. */
 export async function createBoldCheckout(plan: PayablePlan): Promise<BoldCheckoutData> {

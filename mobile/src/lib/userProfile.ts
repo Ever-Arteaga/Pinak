@@ -1,3 +1,4 @@
+
 import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { db } from "./firebase";
@@ -6,6 +7,10 @@ import type { Plan } from "../types/pinak";
 interface UserProfileData {
   businessName: string;
   plan: Plan;
+  privacyModeEnabled: boolean;
+  planTrial: boolean;
+  planExpiresAt: Date | null;
+  trialsUsed: { pro: boolean; premium: boolean };
 }
 
 /** Hook en tiempo real con el perfil del negocio del usuario (incluye el plan actual). */
@@ -28,6 +33,13 @@ export function useUserProfile(userId: string | undefined) {
           ? {
               businessName: data.businessName ?? "",
               plan: (data.plan as Plan) ?? "emprendedor",
+              privacyModeEnabled: data.privacyModeEnabled === true,
+              planTrial: data.planTrial === true,
+              planExpiresAt: data.planExpiresAt?.toDate?.() ?? null,
+              trialsUsed: {
+                pro: data.trialsUsed?.pro === true,
+                premium: data.trialsUsed?.premium === true,
+              },
             }
           : null
       );

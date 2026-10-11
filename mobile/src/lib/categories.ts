@@ -1,20 +1,21 @@
+
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { db } from "./firebase";
 import type { Category, TransactionType } from "../types/pinak";
 
-export function useCategories(userId: string | undefined) {
+export function useCategories(businessId: string | undefined) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId) {
+    if (!businessId) {
       setCategories([]);
       setLoading(false);
       return;
     }
 
-    const q = query(collection(db, "users", userId, "categories"), orderBy("name", "asc"));
+    const q = query(collection(db, "businesses", businessId, "categories"), orderBy("name", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items = snapshot.docs.map((docSnap) => {
         const data = docSnap.data();
@@ -32,13 +33,13 @@ export function useCategories(userId: string | undefined) {
     });
 
     return unsubscribe;
-  }, [userId]);
+  }, [businessId]);
 
   return { categories, loading };
 }
 
-export async function addCategory(userId: string, name: string, type: TransactionType) {
-  const ref = collection(db, "users", userId, "categories");
+export async function addCategory(businessId: string, name: string, type: TransactionType) {
+  const ref = collection(db, "businesses", businessId, "categories");
   await addDoc(ref, {
     name,
     type,

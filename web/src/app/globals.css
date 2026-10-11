@@ -45,3 +45,50 @@ body {
 .font-display {
   font-family: var(--font-display), var(--font-sans), sans-serif;
 }
+
+/* ------------------------------------------------------------------ */
+/* Modo oscuro: se activa con la clase "dark" en <html>                */
+/* ------------------------------------------------------------------ */
+html.dark {
+  color-scheme: dark;
+  --pinak-cream: #0c0e1f;
+  --pinak-ink: #e9ebf7;
+  --pinak-ink-soft: #a3a7c2;
+  --pinak-line: #2a2e52;
+  --pinak-green-100: #1c3a2d;
+  --pinak-green-600: #7cc29d;
+  --pinak-danger: #e8836f;
+}
+
+/* navy-900 se usa como texto y como fondo de botón: se separan los dos usos */
+html.dark .text-navy-900,
+html.dark .hover\:text-navy-900:hover { color: #e9ebf7; }
+html.dark .bg-navy-900 { background-color: #2f3590; }
+html.dark .bg-navy-800,
+html.dark .hover\:bg-navy-800:hover { background-color: #3a41a8; }
+html.dark .border-navy-900 { border-color: #5a61c9; }
+html.dark .bg-white { background-color: #161933; }
+html.dark .bg-white\/95 { background-color: rgba(22, 25, 51, 0.95); }
+html.dark .hover\:bg-cream:hover { background-color: #1d2140; }
+html.dark .hover\:bg-green-100:hover { background-color: #1c3a2d; }
+html.dark .bg-red-50,
+html.dark .hover\:bg-red-50:hover { background-color: #3a1d1d; }
+html.dark .bg-black\/40 { background-color: rgba(0, 0, 0, 0.65); }
+/* Los botones blancos sobre fondos oscuros (tarjeta Premium) conservan texto legible */
+html.dark .bg-navy-900 .bg-white { background-color: #e9ebf7; }
+html.dark .bg-navy-900 .bg-white.text-navy-900 { color: #10123a; }
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #11142b;
+  color: var(--pinak-ink);
+}
+html.dark ::placeholder { color: #6c7090; }
+
+/* Escritorio: el menú lateral queda fijo y el contenido se corre a la derecha */
+@media (min-width: 1024px) {
+  body:has(.pinak-sidebar) {
+    padding-left: 18rem;
+  }
+}

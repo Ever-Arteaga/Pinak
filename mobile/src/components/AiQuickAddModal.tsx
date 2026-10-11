@@ -10,7 +10,8 @@ import {
 } from "react-native";
 import { addTransaction } from "../lib/transactions";
 import { parseTransactionText, type AiParsedTransaction } from "../lib/ai";
-import { colors } from "../theme";
+import { MoneyInput } from "./MoneyInput";
+import { colors, themedStyles } from "../theme";
 
 const currency = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -22,16 +23,17 @@ type Step = "input" | "preview";
 
 export function AiQuickAddModal({
   visible,
-  userId,
+  businessId,
   onClose,
 }: {
   visible: boolean;
-  userId: string;
+  businessId: string;
   onClose: () => void;
 }) {
   const [step, setStep] = useState<Step>("input");
   const [text, setText] = useState("");
   const [candidates, setCandidates] = useState<AiParsedTransaction[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [usageInfo, setUsageInfo] = useState<{ used: number; limit: number | null } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -55,7 +57,7 @@ export function AiQuickAddModal({
     setProcessing(true);
     setError(null);
     try {
-      const result = await parseTransactionText(text.trim());
+      const result = await parseTransactionText(text.trim(), businessId);
       if (result.transactions.length === 0) {
         setError(
           "No pude identificar ningún movimiento en ese mensaje. Intenta ser más específico (monto, si fue ingreso o gasto)."
@@ -63,6 +65,7 @@ export function AiQuickAddModal({
         return;
       }
       setCandidates(result.transactions);
+      setWarnings(result.warnings ?? []);
       setUsageInfo(result.usage);
       setStep("preview");
     } catch (err) {
@@ -78,7 +81,7 @@ export function AiQuickAddModal({
     try {
       await Promise.all(
         candidates.map((c) =>
-          addTransaction(userId, {
+          addTransaction(businessId, {
             type: c.type,
             amount: c.amount,
             category: c.category,
@@ -147,6 +150,11 @@ export function AiQuickAddModal({
 
           {step === "preview" && (
             <View>
+              {warnings.map((w) => (
+                <Text key={w} style={styles.warning}>
+                  ⚠️ {w}
+                </Text>
+              ))}
               {usageInfo?.limit !== null && usageInfo && (
                 <Text style={styles.usageText}>
                   Registros IA usados este mes: {usageInfo.used}/{usageInfo.limit}
@@ -190,12 +198,7 @@ export function AiQuickAddModal({
                         <Text style={styles.removeText}>✕</Text>
                       </TouchableOpacity>
                     </View>
-                    <TextInput
-                      style={styles.amountInput}
-                      keyboardType="numeric"
-                      value={String(c.amount)}
-                      onChangeText={(v) => updateCandidate(i, { amount: Number(v) || 0 })}
-                    />
+                    <MoneyInput style={styles.amountInput} value={String(c.amount || "")} onChange={(d) => updateCandidate(i, { amount: Number(d) })} />
                   </View>
                 ))}
 
@@ -241,7 +244,7 @@ export function AiQuickAddModal({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   sheet: {
     backgroundColor: colors.white,
@@ -251,7 +254,7 @@ const styles = StyleSheet.create({
     maxHeight: "85%",
   },
   header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
-  title: { fontSize: 17, fontWeight: "700", color: colors.navy900 },
+  title: { fontSize: 17, fontWeight: "700", color: colors.title },
   close: { fontSize: 16, color: colors.inkSoft },
   hint: { fontSize: 13, color: colors.inkSoft, marginBottom: 10, lineHeight: 18 },
   textarea: {
@@ -264,6 +267,14 @@ const styles = StyleSheet.create({
     color: colors.ink,
     minHeight: 90,
     textAlignVertical: "top",
+  },
+  warning: {
+    backgroundColor: "#fff4d6",
+    color: "#7a5b00",
+    fontSize: 12,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
   },
   error: {
     color: colors.danger,
@@ -287,7 +298,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     alignItems: "center",
   },
-  primaryButtonText: { color: colors.white, fontWeight: "700", fontSize: 14 },
+  primaryButtonText: { color: colors.onNavy, fontWeight: "700", fontSize: 14 },
   disabled: { opacity: 0.6 },
   usageText: { fontSize: 12, color: colors.inkSoft, marginBottom: 10 },
   candidateList: { maxHeight: 320 },
@@ -337,4 +348,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   secondaryButtonText: { color: colors.ink, fontWeight: "700", fontSize: 14 },
-});
+}));

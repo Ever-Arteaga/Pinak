@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { colors } from "../theme";
+import { colors, themedStyles } from "../theme";
+import { useNav } from "../nav";
 
 export function AppHeader({
   onBack,
@@ -12,9 +13,13 @@ export function AppHeader({
   title?: string;
   onLogout?: () => void;
 }) {
+  const { openMenu } = useNav();
   return (
     <View style={styles.header}>
-      <View style={styles.side}>
+      <View style={[styles.side, { flexDirection: "row", alignItems: "center", gap: 4 }]}>
+        <TouchableOpacity onPress={openMenu} hitSlop={8} style={styles.menuButton} accessibilityLabel="Abrir menú">
+          <Text style={styles.menuIcon}>☰</Text>
+        </TouchableOpacity>
         {onBack ? (
           <TouchableOpacity style={styles.backButton} onPress={onBack} hitSlop={8}>
             <Text style={styles.backArrow}>‹</Text>
@@ -42,7 +47,7 @@ export function AppHeader({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -54,11 +59,13 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.line,
   },
   side: { minWidth: 60, flexShrink: 0 },
+  menuButton: { paddingHorizontal: 8, paddingVertical: 4 },
+  menuIcon: { fontSize: 20, color: colors.inkSoft },
   sideRight: { alignItems: "flex-end" },
   logo: {
     fontSize: 18,
     fontWeight: "700",
-    color: colors.navy900,
+    color: colors.title,
     letterSpacing: 0.5,
     paddingLeft: 4,
   },
@@ -78,7 +85,7 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: "center",
   },
-  centerTitle: { fontSize: 15, fontWeight: "700", color: colors.navy900 },
+  centerTitle: { fontSize: 15, fontWeight: "700", color: colors.title },
   logoutButton: {
     width: 36,
     height: 36,
@@ -88,4 +95,4 @@ const styles = StyleSheet.create({
     backgroundColor: "#fdf0ee",
   },
   logoutIcon: { fontSize: 15, color: colors.danger },
-});
+}));

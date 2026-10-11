@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useAuthUser, logoutUser } from "../lib/auth";
-import { useUserProfile } from "../lib/userProfile";
+import { logoutUser } from "../lib/auth";
+import { useBusiness } from "../lib/business";
+import { usePrivacy } from "../lib/privacy";
+import { useBusinessGate } from "../components/BusinessGate";
+import { InvitationsBanner } from "../components/InvitationsBanner";
 import { computeBalance, useTransactions } from "../lib/transactions";
 import { AddTransactionModal } from "../components/AddTransactionModal";
 import { AiQuickAddModal } from "../components/AiQuickAddModal";
 import { AppHeader } from "../components/AppHeader";
-import { colors } from "../theme";
+import { colors, themedStyles } from "../theme";
 import { PLAN_LIMITS, type Transaction } from "../types/pinak";
 
 const currency = new Intl.NumberFormat("es-CO", {
@@ -24,14 +27,16 @@ export default function DashboardScreen({
   onOpenReports: () => void;
   onOpenUpgrade: () => void;
 }) {
-  const { user } = useAuthUser();
-  const { profile } = useUserProfile(user?.uid);
-  const { transactions, loading } = useTransactions(user?.uid);
+  const { business } = useBusiness();
+  const { money } = usePrivacy();
+  const { transactions, loading } = useTransactions(business?.id);
   const [showModal, setShowModal] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
-  if (!user) return null;
+  const gate = useBusinessGate();
+  if (gate) return gate;
+  const biz = business!;
 
   const { balance, totalIngresos, totalEgresos } = computeBalance(transactions);
   const recientes = transactions.slice(0, 8);
@@ -46,28 +51,30 @@ export default function DashboardScreen({
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <>
+            <Text style={styles.bizTitle}>{biz.name}</Text>
+            <InvitationsBanner />
             <View style={styles.balanceCard}>
               <Text style={styles.balanceLabel}>Balance total</Text>
-              <Text style={styles.balanceValue}>{currency.format(balance)}</Text>
+              <Text style={styles.balanceValue}>{money(balance)}</Text>
               <View style={styles.balanceRow}>
                 <View>
                   <Text style={styles.balanceSubLabel}>Ingresos</Text>
-                  <Text style={styles.ingresoText}>{currency.format(totalIngresos)}</Text>
+                  <Text style={styles.ingresoText}>{money(totalIngresos)}</Text>
                 </View>
                 <View>
                   <Text style={styles.balanceSubLabel}>Egresos</Text>
-                  <Text style={styles.egresoText}>{currency.format(totalEgresos)}</Text>
+                  <Text style={styles.egresoText}>{money(totalEgresos)}</Text>
                 </View>
               </View>
             </View>
 
-            {profile && PLAN_LIMITS[profile.plan].aiEnabled && (
+            {PLAN_LIMITS[biz.plan].aiEnabled && (
               <TouchableOpacity style={styles.aiButton} onPress={() => setShowAiModal(true)}>
                 <Text style={styles.aiButtonText}>✨ Registrar con IA (voz o texto)</Text>
               </TouchableOpacity>
             )}
 
-            {profile && !PLAN_LIMITS[profile.plan].aiEnabled && (
+            {!PLAN_LIMITS[biz.plan].aiEnabled && (
               <TouchableOpacity style={styles.upsellBanner} onPress={onOpenUpgrade}>
                 <Text style={styles.upsellText}>
                   ✨ Registra ventas hablando o escribiendo con IA
@@ -114,7 +121,7 @@ export default function DashboardScreen({
 
       <AddTransactionModal
         visible={showModal || Boolean(editingTransaction)}
-        userId={user.uid}
+        businessId={biz.id}
         editingTransaction={editingTransaction}
         onClose={() => {
           setShowModal(false);
@@ -124,7 +131,7 @@ export default function DashboardScreen({
 
       <AiQuickAddModal
         visible={showAiModal}
-        userId={user.uid}
+        businessId={biz.id}
         onClose={() => setShowAiModal(false)}
       />
     </View>
@@ -132,6 +139,7 @@ export default function DashboardScreen({
 }
 
 function TransactionRow({ item, onPress }: { item: Transaction; onPress: () => void }) {
+  const { money } = usePrivacy();
   return (
     <TouchableOpacity style={styles.txRow} onPress={onPress} activeOpacity={0.7}>
       <View>
@@ -143,18 +151,19 @@ function TransactionRow({ item, onPress }: { item: Transaction; onPress: () => v
       </View>
       <Text style={item.type === "ingreso" ? styles.ingresoText : styles.egresoText}>
         {item.type === "ingreso" ? "+" : "-"}
-        {currency.format(item.amount)}
+        {money(item.amount)}
       </Text>
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.cream },
   listContent: { padding: 20, paddingBottom: 60 },
+  bizTitle: { fontSize: 13, fontWeight: "700", color: colors.inkSoft, marginBottom: 8 },
   balanceCard: { backgroundColor: colors.navy900, borderRadius: 16, padding: 20 },
   balanceLabel: { color: "rgba(255,255,255,0.7)", fontSize: 13 },
-  balanceValue: { color: colors.white, fontSize: 28, fontWeight: "700", marginTop: 4 },
+  balanceValue: { color: colors.onNavy, fontSize: 28, fontWeight: "700", marginTop: 4 },
   balanceRow: { flexDirection: "row", gap: 24, marginTop: 18 },
   balanceSubLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11 },
   ingresoText: { color: colors.green500, fontWeight: "600", fontSize: 14 },
@@ -167,7 +176,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 14,
   },
-  aiButtonText: { color: colors.white, fontWeight: "700", fontSize: 14 },
+  aiButtonText: { color: colors.onNavy, fontWeight: "700", fontSize: 14 },
   upsellBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -182,7 +191,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   upsellText: { flex: 1, fontSize: 12.5, color: colors.ink, marginRight: 8 },
-  upsellLink: { fontSize: 12.5, fontWeight: "700", color: colors.navy900 },
+  upsellLink: { fontSize: 12.5, fontWeight: "700", color: colors.title },
   primaryAction: {
     flex: 1,
     backgroundColor: colors.green600,
@@ -191,7 +200,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     alignItems: "center",
   },
-  primaryActionText: { color: colors.white, fontWeight: "700", fontSize: 12 },
+  primaryActionText: { color: colors.onNavy, fontWeight: "700", fontSize: 12 },
   secondaryAction: {
     flex: 1,
     borderWidth: 1,
@@ -202,7 +211,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     alignItems: "center",
   },
-  secondaryActionText: { color: colors.navy900, fontWeight: "700", fontSize: 12 },
+  secondaryActionText: { color: colors.title, fontWeight: "700", fontSize: 12 },
   sectionTitle: {
     fontSize: 12,
     fontWeight: "700",
@@ -226,4 +235,4 @@ const styles = StyleSheet.create({
   },
   txCategory: { fontSize: 14, fontWeight: "600", color: colors.ink },
   txMeta: { fontSize: 12, color: colors.inkSoft, marginTop: 2 },
-});
+}));

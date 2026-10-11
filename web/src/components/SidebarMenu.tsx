@@ -10,6 +10,7 @@ import type { Plan } from "@/types/pinak";
 import { PinakWordmark } from "./PinakLogo";
 import { EyeOffIcon } from "./PrivacyIcons";
 import { InstallAppButton } from "./InstallAppButton";
+import { ThemeToggle } from "./ThemeToggle";
 
 function CloseIcon() {
   return (
@@ -204,7 +205,7 @@ export function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => v
 
   // Bloquea el scroll del fondo mientras el menú está abierto
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
+    document.body.style.overflow = open && window.innerWidth < 1024 ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
@@ -222,14 +223,14 @@ export function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => v
       <div
         onClick={onClose}
         aria-hidden="true"
-        className={`fixed inset-0 z-40 bg-navy-900/40 transition-opacity duration-200 ${
+        className={`fixed inset-0 z-40 bg-navy-900/40 lg:hidden transition-opacity duration-200 ${
           open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         }`}
       />
 
       {/* Panel lateral */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[80vw] flex-col bg-white shadow-xl transition-transform duration-200 ${
+        className={`pinak-sidebar fixed inset-y-0 left-0 z-50 flex w-72 max-w-[80vw] flex-col bg-white shadow-xl transition-transform duration-200 lg:max-w-none lg:translate-x-0 lg:border-r lg:border-line lg:shadow-none ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -238,7 +239,7 @@ export function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => v
           <button
             onClick={onClose}
             aria-label="Cerrar menú"
-            className="rounded-lg p-1.5 text-ink-soft transition hover:bg-cream hover:text-navy-900"
+            className="rounded-lg p-1.5 lg:hidden text-ink-soft transition hover:bg-cream hover:text-navy-900"
           >
             <CloseIcon />
           </button>
@@ -362,6 +363,10 @@ export function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => v
         </div>
 
         <div className="border-t border-line px-3 py-4">
+          <ThemeToggle
+            withLabel
+            className="w-full px-3 py-2.5 text-ink-soft hover:bg-cream hover:text-navy-900"
+          />
           <button
             onClick={handleLogout}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-danger transition hover:bg-red-50"

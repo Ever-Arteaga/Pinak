@@ -2,16 +2,18 @@ import { useEffect, useState } from "react";
 import { Alert, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { addReceivable, deleteReceivable, updateReceivable } from "../lib/receivables";
 import type { Receivable } from "../types/pinak";
-import { colors } from "../theme";
+import { MoneyInput } from "./MoneyInput";
+import { MAX_AMOUNT } from "../lib/money";
+import { colors, themedStyles } from "../theme";
 
 export function AddReceivableModal({
   visible,
-  userId,
+  businessId,
   editingReceivable,
   onClose,
 }: {
   visible: boolean;
-  userId: string;
+  businessId: string;
   editingReceivable?: Receivable | null;
   onClose: () => void;
 }) {
@@ -39,16 +41,33 @@ export function AddReceivableModal({
   }, [visible, editingReceivable]);
 
   async function handleSave() {
-    const numericAmount = Number(amount);
-    if (!clientName || !numericAmount || numericAmount <= 0) return;
-    setSaving(true);
     setError(null);
+    const name = clientName.trim();
+    const numericAmount = Number(amount);
+    if (name.length < 2) {
+      setError("Escribe el nombre del cliente.");
+      return;
+    }
+    const phoneDigits = clientPhone.replace(/\D/g, "");
+    if (clientPhone.trim() && (phoneDigits.length < 7 || phoneDigits.length > 15)) {
+      setError("El número de WhatsApp no parece válido.");
+      return;
+    }
+    if (!numericAmount || numericAmount <= 0) {
+      setError("Escribe un monto mayor a cero.");
+      return;
+    }
+    if (numericAmount > MAX_AMOUNT) {
+      setError("El monto es demasiado alto. Revisa que no tenga ceros de más.");
+      return;
+    }
+    setSaving(true);
     try {
-      const payload = { clientName, clientPhone, amount: numericAmount };
+      const payload = { clientName: name, clientPhone: clientPhone.trim(), amount: numericAmount };
       if (isEditing && editingReceivable) {
-        await updateReceivable(userId, editingReceivable.id, payload);
+        await updateReceivable(businessId, editingReceivable.id, payload);
       } else {
-        await addReceivable(userId, payload);
+        await addReceivable(businessId, payload);
       }
       onClose();
     } catch (err) {
@@ -64,7 +83,7 @@ export function AddReceivableModal({
     setDeleting(true);
     setError(null);
     try {
-      await deleteReceivable(userId, editingReceivable.id);
+      await deleteReceivable(businessId, editingReceivable.id);
       onClose();
     } catch (err) {
       console.error("Error al eliminar fiado:", err);
@@ -116,14 +135,7 @@ export function AddReceivableModal({
           />
 
           <Text style={styles.label}>Monto adeudado</Text>
-          <TextInput
-            style={styles.input}
-            value={amount}
-            onChangeText={setAmount}
-            placeholder="$0"
-            keyboardType="numeric"
-            placeholderTextColor={colors.inkSoft}
-          />
+          <MoneyInput style={styles.input} value={amount} onChange={setAmount} />
 
           {error && <Text style={styles.error}>{error}</Text>}
 
@@ -156,7 +168,7 @@ function traducirError(message: string): string {
   return "No se pudo guardar el fiado. Intenta de nuevo.";
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   sheet: {
     backgroundColor: colors.white,
@@ -165,7 +177,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
-  title: { fontSize: 17, fontWeight: "700", color: colors.navy900 },
+  title: { fontSize: 17, fontWeight: "700", color: colors.title },
   close: { fontSize: 16, color: colors.inkSoft },
   error: {
     color: colors.danger,
@@ -192,7 +204,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 20,
   },
-  saveButtonText: { color: colors.white, fontWeight: "700", fontSize: 14 },
+  saveButtonText: { color: colors.onNavy, fontWeight: "700", fontSize: 14 },
   deleteButton: {
     borderWidth: 1,
     borderColor: colors.line,
@@ -202,4 +214,4 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   deleteButtonText: { color: colors.danger, fontWeight: "700", fontSize: 14 },
-});
+}));

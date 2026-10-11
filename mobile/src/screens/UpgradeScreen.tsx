@@ -3,9 +3,10 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import { useAuthUser } from "../lib/auth";
 import { useUserProfile } from "../lib/userProfile";
 import { createBoldCheckout, type BoldCheckoutData } from "../lib/payments";
+import { startTrial } from "../lib/businessApi";
 import { BoldCheckoutModal } from "../components/BoldCheckoutModal";
 import { AppHeader } from "../components/AppHeader";
-import { colors } from "../theme";
+import { colors, themedStyles } from "../theme";
 import { PLAN_LIMITS, type Plan } from "../types/pinak";
 
 const currency = new Intl.NumberFormat("es-CO", {
@@ -16,16 +17,17 @@ const currency = new Intl.NumberFormat("es-CO", {
 
 const PLAN_FEATURES: Record<"pro" | "premium", string[]> = {
   pro: [
-    "Registro por voz/texto con IA — ilimitado",
-    "Hasta 2 usuarios",
+    "Registro por voz y texto con IA, sin límite",
+    "2 usuarios en tu negocio (tú y una persona más)",
     "Fiados y cobro por WhatsApp",
-    "Reportes en PDF y Excel",
+    "Reportes exportables a PDF y Excel",
   ],
   premium: [
     "Todo lo de Pro",
-    "Usuarios y negocios ilimitados",
-    "Modo privacidad en pantalla",
+    "Usuarios ilimitados en cada negocio",
+    "Varios negocios en una sola cuenta",
     "Diagnóstico financiero mensual con IA",
+    "Modo privacidad en pantalla",
     "Soporte prioritario",
   ],
 };
@@ -41,9 +43,29 @@ export default function UpgradeScreen({ onBack }: { onBack: () => void }) {
   const { profile } = useUserProfile(user?.uid);
   const [loadingPlan, setLoadingPlan] = useState<"pro" | "premium" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [trialMsg, setTrialMsg] = useState<string | null>(null);
   const [checkoutData, setCheckoutData] = useState<BoldCheckoutData | null>(null);
 
   if (!user) return null;
+
+  function canTrial(plan: "pro" | "premium") {
+    if (!profile || profile.trialsUsed[plan] || profile.plan === plan) return false;
+    if (profile.plan === "emprendedor") return true;
+    return profile.planTrial && profile.plan === "pro" && plan === "premium";
+  }
+
+  async function handleTrial(plan: "pro" | "premium") {
+    setError(null);
+    setLoadingPlan(plan);
+    try {
+      await startTrial({ plan });
+      setTrialMsg(`¡Listo! Tienes 15 días de ${plan === "pro" ? "Pro" : "Premium"} gratis.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo activar la prueba.");
+    } finally {
+      setLoadingPlan(null);
+    }
+  }
 
   async function handleUpgrade(plan: "pro" | "premium") {
     setError(null);
@@ -70,10 +92,17 @@ export default function UpgradeScreen({ onBack }: { onBack: () => void }) {
           </Text>
         </Text>
 
+        {profile?.planTrial && profile.planExpiresAt && (
+          <Text style={styles.trialInfo}>
+            Prueba gratuita activa hasta el{" "}
+            {profile.planExpiresAt.toLocaleDateString("es-CO", { day: "numeric", month: "long" })}.
+          </Text>
+        )}
+        {trialMsg && <Text style={styles.trialInfo}>{trialMsg}</Text>}
         {error && <Text style={styles.error}>{error}</Text>}
 
         {(["pro", "premium"] as const).map((plan) => {
-          const isCurrent = profile?.plan === plan;
+          const isCurrent = profile?.plan === plan && !profile?.planTrial;
           const isPremium = plan === "premium";
           return (
             <View
@@ -116,12 +145,23 @@ export default function UpgradeScreen({ onBack }: { onBack: () => void }) {
                     : `Actualizar a ${plan === "pro" ? "Pro" : "Premium"}`}
                 </Text>
               </TouchableOpacity>
+              {canTrial(plan) && (
+                <TouchableOpacity
+                  style={[styles.trialButton, isPremium && styles.trialButtonDark]}
+                  onPress={() => handleTrial(plan)}
+                  disabled={loadingPlan !== null}
+                >
+                  <Text style={[styles.trialButtonText, isPremium && styles.textWhite]}>
+                    Probar 15 días gratis
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           );
         })}
 
         <Text style={styles.footnote}>
-          Pagas de forma segura con Bold (Nequi, tarjeta, PSE). Tu plan se
+          La prueba gratuita no pide tarjeta y se activa una sola vez por plan. Pagas de forma segura con Bold (Nequi, tarjeta, PSE). Tu plan se
           renueva mes a mes — te avisaremos antes de que venza.
         </Text>
       </ScrollView>
@@ -135,11 +175,30 @@ export default function UpgradeScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.cream },
   content: { padding: 20, paddingBottom: 60 },
+  trialInfo: {
+    backgroundColor: colors.green100,
+    color: colors.green600,
+    fontSize: 12.5,
+    textAlign: "center",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  trialButton: {
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  trialButtonDark: { borderColor: "rgba(255,255,255,0.4)" },
+  trialButtonText: { color: colors.title, fontWeight: "700", fontSize: 14 },
   currentPlan: { textAlign: "center", fontSize: 13, color: colors.inkSoft },
-  currentPlanValue: { fontWeight: "700", color: colors.navy900 },
+  currentPlanValue: { fontWeight: "700", color: colors.title },
   error: {
     marginTop: 14,
     color: colors.danger,
@@ -159,10 +218,10 @@ const styles = StyleSheet.create({
   },
   cardPremium: { backgroundColor: colors.navy900, borderColor: colors.navy900 },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
-  cardTitle: { fontSize: 17, fontWeight: "700", color: colors.navy900 },
-  cardPrice: { fontSize: 14, fontWeight: "700", color: colors.navy900 },
+  cardTitle: { fontSize: 17, fontWeight: "700", color: colors.title },
+  cardPrice: { fontSize: 14, fontWeight: "700", color: colors.title },
   cardPriceUnit: { fontSize: 11, fontWeight: "400", opacity: 0.7 },
-  textWhite: { color: colors.white },
+  textWhite: { color: colors.onNavy },
   feature: { fontSize: 13, color: colors.inkSoft, marginTop: 6 },
   featureWhite: { color: "rgba(255,255,255,0.9)" },
   button: {
@@ -174,7 +233,7 @@ const styles = StyleSheet.create({
   },
   buttonWhite: { backgroundColor: colors.white },
   buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: colors.white, fontWeight: "700", fontSize: 14 },
-  buttonTextDark: { color: colors.navy900 },
+  buttonText: { color: colors.onNavy, fontWeight: "700", fontSize: 14 },
+  buttonTextDark: { color: colors.title },
   footnote: { marginTop: 24, textAlign: "center", fontSize: 11, color: colors.inkSoft },
-});
+}));

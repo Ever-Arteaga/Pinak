@@ -1,3 +1,4 @@
+
 import {
   addDoc,
   collection,
@@ -22,8 +23,8 @@ interface NewReceivableInput {
   dueDate?: Date;
 }
 
-export async function addReceivable(userId: string, input: NewReceivableInput) {
-  const ref = collection(db, "users", userId, "receivables");
+export async function addReceivable(businessId: string, input: NewReceivableInput) {
+  const ref = collection(db, "businesses", businessId, "receivables");
   await addDoc(ref, {
     clientName: input.clientName,
     clientPhone: input.clientPhone ?? "",
@@ -34,18 +35,18 @@ export async function addReceivable(userId: string, input: NewReceivableInput) {
   });
 }
 
-export async function markReceivableAsPaid(userId: string, receivableId: string) {
-  await updateDoc(doc(db, "users", userId, "receivables", receivableId), {
+export async function markReceivableAsPaid(businessId: string, receivableId: string) {
+  await updateDoc(doc(db, "businesses", businessId, "receivables", receivableId), {
     status: "pagado",
   });
 }
 
 export async function updateReceivable(
-  userId: string,
+  businessId: string,
   receivableId: string,
   input: NewReceivableInput
 ) {
-  await updateDoc(doc(db, "users", userId, "receivables", receivableId), {
+  await updateDoc(doc(db, "businesses", businessId, "receivables", receivableId), {
     clientName: input.clientName,
     clientPhone: input.clientPhone ?? "",
     amount: input.amount,
@@ -53,23 +54,23 @@ export async function updateReceivable(
   });
 }
 
-export async function deleteReceivable(userId: string, receivableId: string) {
-  await deleteDoc(doc(db, "users", userId, "receivables", receivableId));
+export async function deleteReceivable(businessId: string, receivableId: string) {
+  await deleteDoc(doc(db, "businesses", businessId, "receivables", receivableId));
 }
 
-export function useReceivables(userId: string | undefined) {
+export function useReceivables(businessId: string | undefined) {
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId) {
+    if (!businessId) {
       setReceivables([]);
       setLoading(false);
       return;
     }
 
     const q = query(
-      collection(db, "users", userId, "receivables"),
+      collection(db, "businesses", businessId, "receivables"),
       orderBy("createdAt", "desc")
     );
 
@@ -91,7 +92,7 @@ export function useReceivables(userId: string | undefined) {
     });
 
     return unsubscribe;
-  }, [userId]);
+  }, [businessId]);
 
   return { receivables, loading };
 }
@@ -102,13 +103,23 @@ const currency = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-function buildMessage(businessName: string, receivable: Receivable): string {
+export function buildWhatsAppCollectionLink(
+  businessName: string,
+  receivable: Receivable
+): string {
   const monto = currency.format(receivable.amount);
-  return (
-    `¡Hola ${receivable.clientName}! 👋 Te escribo de ${businessName} para recordarte ` +
-    `tu saldo pendiente de ${monto}. Puedes pagarlo fácilmente por Nequi o Daviplata ` +
-    `cuando gustes. ¡Gracias por tu confianza! 🙌`
-  );
+  const negocio = businessName.trim() || "mi negocio";
+  const mensaje =
+    `¡Hola ${receivable.clientName}! 👋 Te escribo de ${negocio} para recordarte ` +
+    `tu saldo pendiente de ${monto}. Puedes pagarlo fácilmente por Nequi o PSE ` +
+    `cuando gustes. ¡Gracias por tu confianza! 🙌`;
+
+  const phone = normalizePhoneNumber(receivable.clientPhone);
+  const encoded = encodeURIComponent(mensaje);
+
+  return phone
+    ? `https://wa.me/${phone}?text=${encoded}`
+    : `https://wa.me/?text=${encoded}`;
 }
 
 function normalizePhoneNumber(raw?: string): string | null {
@@ -120,10 +131,7 @@ function normalizePhoneNumber(raw?: string): string | null {
   return digits;
 }
 
+/** Abre WhatsApp con el mensaje de cobro, usando el nombre ACTUAL del negocio. */
 export async function openWhatsAppCollection(businessName: string, receivable: Receivable) {
-  const mensaje = buildMessage(businessName, receivable);
-  const phone = normalizePhoneNumber(receivable.clientPhone);
-  const encoded = encodeURIComponent(mensaje);
-  const url = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
-  await Linking.openURL(url);
+  await Linking.openURL(buildWhatsAppCollectionLink(businessName, receivable));
 }

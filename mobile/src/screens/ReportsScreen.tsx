@@ -1,10 +1,14 @@
 import { useMemo, useState } from "react";
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useAuthUser } from "../lib/auth";
+import { useBusiness } from "../lib/business";
+import { useBusinessGate } from "../components/BusinessGate";
+import { usePrivacy } from "../lib/privacy";
+import { PLAN_LIMITS } from "../types/pinak";
+import { useNav } from "../nav";
 import { computeBalance, useTransactions } from "../lib/transactions";
 import { exportTransactionsToExcel, exportTransactionsToPdf } from "../lib/reports";
 import { AppHeader } from "../components/AppHeader";
-import { colors } from "../theme";
+import { colors, themedStyles } from "../theme";
 import type { Transaction } from "../types/pinak";
 
 const currency = new Intl.NumberFormat("es-CO", {
@@ -23,8 +27,10 @@ const RANGE_LABELS: Record<Range, string> = {
 };
 
 export default function ReportsScreen({ onBack }: { onBack: () => void }) {
-  const { user } = useAuthUser();
-  const { transactions, loading } = useTransactions(user?.uid);
+  const { business } = useBusiness();
+  const { money } = usePrivacy();
+  const nav = useNav();
+  const { transactions, loading } = useTransactions(business?.id);
   const [range, setRange] = useState<Range>("30d");
   const [exporting, setExporting] = useState(false);
 
@@ -44,10 +50,13 @@ export default function ReportsScreen({ onBack }: { onBack: () => void }) {
     return transactions.filter((t) => t.date >= start);
   }, [transactions, range]);
 
-  if (!user) return null;
+  const gate = useBusinessGate();
+  if (gate) return gate;
+  const biz = business!;
+  const canExport = PLAN_LIMITS[biz.plan].exports;
 
   const { balance, totalIngresos, totalEgresos } = computeBalance(filtered);
-  const businessName = user.displayName || "Mi negocio";
+  const businessName = biz.name;
 
   async function handleExport(fn: (b: string, t: Transaction[]) => Promise<void>) {
     setExporting(true);
@@ -84,19 +93,20 @@ export default function ReportsScreen({ onBack }: { onBack: () => void }) {
 
             <View style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>Balance del periodo</Text>
-              <Text style={styles.summaryValue}>{currency.format(balance)}</Text>
+              <Text style={styles.summaryValue}>{money(balance)}</Text>
               <View style={styles.summaryRow}>
                 <View>
                   <Text style={styles.summarySubLabel}>Ingresos</Text>
-                  <Text style={styles.ingresoText}>{currency.format(totalIngresos)}</Text>
+                  <Text style={styles.ingresoText}>{money(totalIngresos)}</Text>
                 </View>
                 <View>
                   <Text style={styles.summarySubLabel}>Egresos</Text>
-                  <Text style={styles.egresoText}>{currency.format(totalEgresos)}</Text>
+                  <Text style={styles.egresoText}>{money(totalEgresos)}</Text>
                 </View>
               </View>
             </View>
 
+            {canExport ? (
             <View style={styles.exportRow}>
               <TouchableOpacity
                 style={styles.exportButton}
@@ -113,6 +123,12 @@ export default function ReportsScreen({ onBack }: { onBack: () => void }) {
                 <Text style={styles.exportButtonText}>Exportar Excel</Text>
               </TouchableOpacity>
             </View>
+            ) : (
+              <TouchableOpacity style={styles.exportLocked} onPress={() => nav.go("upgrade")}>
+                <Text style={styles.exportLockedText}>📄 Exporta tus reportes a PDF y Excel</Text>
+                <Text style={styles.exportLockedBadge}>Pro</Text>
+              </TouchableOpacity>
+            )}
 
             <Text style={styles.sectionTitle}>Movimientos del periodo ({filtered.length})</Text>
 
@@ -132,7 +148,7 @@ export default function ReportsScreen({ onBack }: { onBack: () => void }) {
             </View>
             <Text style={item.type === "ingreso" ? styles.ingresoText : styles.egresoText}>
               {item.type === "ingreso" ? "+" : "-"}
-              {currency.format(item.amount)}
+              {money(item.amount)}
             </Text>
           </View>
         )}
@@ -141,9 +157,32 @@ export default function ReportsScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.cream },
   listContent: { padding: 20, paddingBottom: 60 },
+  exportLocked: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: colors.line,
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 12,
+  },
+  exportLockedText: { flex: 1, fontSize: 13, color: colors.ink },
+  exportLockedBadge: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.title,
+    backgroundColor: colors.green100,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    overflow: "hidden",
+  },
   rangeRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
   rangeChip: {
     borderWidth: 1,
@@ -154,10 +193,10 @@ const styles = StyleSheet.create({
   },
   rangeChipActive: { backgroundColor: colors.navy900, borderColor: colors.navy900 },
   rangeChipText: { fontSize: 12, color: colors.ink },
-  rangeChipTextActive: { fontSize: 12, color: colors.white, fontWeight: "700" },
+  rangeChipTextActive: { fontSize: 12, color: colors.onNavy, fontWeight: "700" },
   summaryCard: { backgroundColor: colors.navy900, borderRadius: 16, padding: 20 },
   summaryLabel: { color: "rgba(255,255,255,0.7)", fontSize: 13 },
-  summaryValue: { color: colors.white, fontSize: 26, fontWeight: "700", marginTop: 4 },
+  summaryValue: { color: colors.onNavy, fontSize: 26, fontWeight: "700", marginTop: 4 },
   summaryRow: { flexDirection: "row", gap: 24, marginTop: 18 },
   summarySubLabel: { color: "rgba(255,255,255,0.6)", fontSize: 11 },
   ingresoText: { color: colors.green500, fontWeight: "600", fontSize: 14 },
@@ -172,7 +211,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
   },
-  exportButtonText: { color: colors.navy900, fontWeight: "700", fontSize: 13 },
+  exportButtonText: { color: colors.title, fontWeight: "700", fontSize: 13 },
   sectionTitle: {
     fontSize: 12,
     fontWeight: "700",
@@ -196,4 +235,4 @@ const styles = StyleSheet.create({
   },
   txCategory: { fontSize: 14, fontWeight: "600", color: colors.ink },
   txMeta: { fontSize: 12, color: colors.inkSoft, marginTop: 2 },
-});
+}));

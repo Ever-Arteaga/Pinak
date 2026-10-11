@@ -96,7 +96,7 @@ export default function ReportsPage() {
     <main className="min-h-screen bg-cream pb-24">
       <AppHeader backHref="/dashboard" backLabel="Dashboard" title="Reportes" />
 
-      <div className="mx-auto max-w-md px-5 pt-6">
+      <div className="mx-auto w-full max-w-md px-5 pt-6 md:max-w-2xl md:px-8 lg:max-w-4xl">
         <div className="flex gap-2 overflow-x-auto pb-1">
           {(Object.keys(RANGE_LABELS) as Range[]).map((r) => (
             <button
@@ -113,7 +113,8 @@ export default function ReportsPage() {
           ))}
         </div>
 
-        <section className="mt-4 rounded-2xl bg-navy-900 p-6 text-white shadow-sm">
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <section className="rounded-2xl bg-navy-900 p-6 text-white shadow-sm">
           <p className="text-sm text-white/70">Balance del periodo</p>
           <p className="font-display mt-1 text-3xl font-semibold tracking-tight">
             {money(balance)}
@@ -135,7 +136,7 @@ export default function ReportsPage() {
         </section>
 
         {/* Gráfica de ingresos vs egresos del periodo */}
-        <section className="mt-4 rounded-2xl border border-line bg-white p-5">
+        <section className="rounded-2xl border border-line bg-white p-5">
           <h2 className="font-display text-sm font-semibold text-navy-900">
             Movimientos por periodo
           </h2>
@@ -143,6 +144,7 @@ export default function ReportsPage() {
             <BarChart data={datosGrafica} formatValue={(v) => money(v)} />
           </div>
         </section>
+        </div>
 
         <ExportButtons
           allowed={PLAN_LIMITS[biz.plan].exports}

@@ -86,7 +86,7 @@ export default function DiagnosticoPage() {
     <main className="min-h-screen bg-cream pb-24">
       <AppHeader backHref="/dashboard" backLabel="Dashboard" title="Diagnóstico financiero" />
 
-      <div className="mx-auto max-w-md px-5 pt-6">
+      <div className="mx-auto w-full max-w-md px-5 pt-6 md:max-w-2xl md:px-8 lg:max-w-4xl">
         {!allowed ? (
           <section className="rounded-2xl border border-line bg-white p-6 text-center">
             <p className="text-3xl" aria-hidden>

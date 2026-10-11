@@ -1,3 +1,4 @@
+
 import {
   addDoc,
   collection,
@@ -21,10 +22,12 @@ interface NewTransactionInput {
   method: Transaction["method"];
   description?: string;
   date?: Date;
+  /** Origen del registro. Por defecto "manual". */
+  source?: Transaction["source"];
 }
 
-export async function addTransaction(userId: string, input: NewTransactionInput) {
-  const ref = collection(db, "users", userId, "transactions");
+export async function addTransaction(businessId: string, input: NewTransactionInput) {
+  const ref = collection(db, "businesses", businessId, "transactions");
   await addDoc(ref, {
     type: input.type,
     amount: input.amount,
@@ -32,17 +35,17 @@ export async function addTransaction(userId: string, input: NewTransactionInput)
     method: input.method,
     description: input.description ?? "",
     date: input.date ? Timestamp.fromDate(input.date) : serverTimestamp(),
-    source: "manual",
+    source: input.source ?? "manual",
     createdAt: serverTimestamp(),
   });
 }
 
 export async function updateTransaction(
-  userId: string,
+  businessId: string,
   transactionId: string,
   input: NewTransactionInput
 ) {
-  const ref = doc(db, "users", userId, "transactions", transactionId);
+  const ref = doc(db, "businesses", businessId, "transactions", transactionId);
   await updateDoc(ref, {
     type: input.type,
     amount: input.amount,
@@ -53,24 +56,24 @@ export async function updateTransaction(
   });
 }
 
-export async function deleteTransaction(userId: string, transactionId: string) {
-  const ref = doc(db, "users", userId, "transactions", transactionId);
+export async function deleteTransaction(businessId: string, transactionId: string) {
+  const ref = doc(db, "businesses", businessId, "transactions", transactionId);
   await deleteDoc(ref);
 }
 
-export function useTransactions(userId: string | undefined) {
+export function useTransactions(businessId: string | undefined) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId) {
+    if (!businessId) {
       setTransactions([]);
       setLoading(false);
       return;
     }
 
     const q = query(
-      collection(db, "users", userId, "transactions"),
+      collection(db, "businesses", businessId, "transactions"),
       orderBy("date", "desc")
     );
 
@@ -94,7 +97,7 @@ export function useTransactions(userId: string | undefined) {
     });
 
     return unsubscribe;
-  }, [userId]);
+  }, [businessId]);
 
   return { transactions, loading };
 }

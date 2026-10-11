@@ -66,7 +66,7 @@ export function AppHeader({
           <button
             onClick={() => setMenuAbierto(true)}
             aria-label="Abrir menú"
-            className="rounded-lg p-2 text-ink-soft transition hover:bg-cream hover:text-navy-900"
+            className="rounded-lg p-2 text-ink-soft transition hover:bg-cream hover:text-navy-900 lg:hidden"
           >
             <MenuIcon />
           </button>

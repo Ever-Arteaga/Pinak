@@ -13,7 +13,9 @@ import {
 import { addTransaction, deleteTransaction, updateTransaction } from "../lib/transactions";
 import { addCategory, useCategories } from "../lib/categories";
 import type { PaymentMethod, Transaction, TransactionType } from "../types/pinak";
-import { colors } from "../theme";
+import { MoneyInput } from "./MoneyInput";
+import { MAX_AMOUNT } from "../lib/money";
+import { colors, themedStyles } from "../theme";
 
 const METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "efectivo", label: "Efectivo" },
@@ -27,12 +29,12 @@ const MAX_SHEET_HEIGHT = Dimensions.get("window").height * 0.85;
 
 export function AddTransactionModal({
   visible,
-  userId,
+  businessId,
   editingTransaction,
   onClose,
 }: {
   visible: boolean;
-  userId: string;
+  businessId: string;
   editingTransaction?: Transaction | null;
   onClose: () => void;
 }) {
@@ -48,7 +50,7 @@ export function AddTransactionModal({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { categories } = useCategories(userId);
+  const { categories } = useCategories(businessId);
   const categoriesForType = categories.filter((c) => c.type === type);
 
   useEffect(() => {
@@ -70,26 +72,36 @@ export function AddTransactionModal({
   }, [visible, editingTransaction]);
 
   async function handleSave() {
+    setError(null);
     const numericAmount = Number(amount);
-    if (!numericAmount || numericAmount <= 0) return;
+    if (!numericAmount || numericAmount <= 0) {
+      setError("Escribe un monto mayor a cero.");
+      return;
+    }
+    if (numericAmount > MAX_AMOUNT) {
+      setError("El monto es demasiado alto. Revisa que no tenga ceros de más.");
+      return;
+    }
     const finalCategory = addingCustom ? customCategory.trim() : category;
-    if (!finalCategory) return;
+    if (!finalCategory) {
+      setError("Elige o escribe una categoría.");
+      return;
+    }
 
     setSaving(true);
-    setError(null);
     try {
       const alreadyExists = categoriesForType.some(
         (c) => c.name.toLowerCase() === finalCategory.toLowerCase()
       );
       if (addingCustom && !alreadyExists) {
-        await addCategory(userId, finalCategory, type);
+        await addCategory(businessId, finalCategory, type);
       }
 
       const payload = { type, amount: numericAmount, category: finalCategory, method };
       if (isEditing && editingTransaction) {
-        await updateTransaction(userId, editingTransaction.id, payload);
+        await updateTransaction(businessId, editingTransaction.id, payload);
       } else {
-        await addTransaction(userId, payload);
+        await addTransaction(businessId, payload);
       }
       onClose();
     } catch (err) {
@@ -107,7 +119,7 @@ export function AddTransactionModal({
     setDeleting(true);
     setError(null);
     try {
-      await deleteTransaction(userId, editingTransaction.id);
+      await deleteTransaction(businessId, editingTransaction.id);
       onClose();
     } catch (err) {
       console.error("Error al eliminar transacción:", err);
@@ -172,14 +184,7 @@ export function AddTransactionModal({
             </View>
 
             <Text style={styles.label}>Monto</Text>
-            <TextInput
-              style={styles.input}
-              keyboardType="numeric"
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="$0"
-              placeholderTextColor={colors.inkSoft}
-            />
+            <MoneyInput style={styles.input} value={amount} onChange={setAmount} />
 
             <Text style={styles.label}>Categoría</Text>
             <View style={styles.methodRow}>
@@ -281,7 +286,7 @@ function traducirError(message: string): string {
   return "No se pudo guardar el registro. Intenta de nuevo.";
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   sheet: {
     backgroundColor: colors.white,
@@ -290,7 +295,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
-  title: { fontSize: 17, fontWeight: "700", color: colors.navy900 },
+  title: { fontSize: 17, fontWeight: "700", color: colors.title },
   close: { fontSize: 16, color: colors.inkSoft },
   error: {
     color: colors.danger,
@@ -335,7 +340,7 @@ const styles = StyleSheet.create({
   addChip: { borderStyle: "dashed" },
   methodChipActive: { backgroundColor: colors.navy900, borderColor: colors.navy900 },
   methodChipText: { fontSize: 12, color: colors.ink },
-  methodChipTextActive: { fontSize: 12, color: colors.white, fontWeight: "600" },
+  methodChipTextActive: { fontSize: 12, color: colors.onNavy, fontWeight: "600" },
   saveButton: {
     backgroundColor: colors.navy900,
     borderRadius: 10,
@@ -343,7 +348,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 20,
   },
-  saveButtonText: { color: colors.white, fontWeight: "700", fontSize: 14 },
+  saveButtonText: { color: colors.onNavy, fontWeight: "700", fontSize: 14 },
   deleteButton: {
     borderWidth: 1,
     borderColor: colors.line,
@@ -354,4 +359,4 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   deleteButtonText: { color: colors.danger, fontWeight: "700", fontSize: 14 },
-});
+}));

@@ -86,7 +86,7 @@ export default function EquipoPage() {
     <main className="min-h-screen bg-cream pb-24">
       <AppHeader backHref="/dashboard" backLabel="Dashboard" title="Equipo" />
 
-      <div className="mx-auto max-w-md px-5 pt-6">
+      <div className="mx-auto w-full max-w-md px-5 pt-6 md:max-w-2xl md:px-8 lg:max-w-4xl">
         <section className="rounded-2xl border border-line bg-white p-5">
           <div className="flex items-baseline justify-between">
             <h1 className="font-display text-sm font-semibold text-navy-900">
