@@ -72,13 +72,13 @@ export const createBoldCheckout = onCall(
     // Firma de integridad exigida por Bold: SHA256(orderId + monto + moneda + llave secreta)
     const integritySignature = crypto
       .createHash("sha256")
-      .update(`${orderId}${amount}${currency}${boldSecretKey.value()}`)
+      .update(`${orderId}${amount}${currency}${boldSecretKey.value().trim()}`)
       .digest("hex");
 
     logger.info("Checkout de Bold generado", { uid, plan, orderId });
 
     return {
-      identityKey: boldIdentityKey.value(),
+      identityKey: boldIdentityKey.value().trim(),
       orderId,
       amount: String(amount),
       currency,
@@ -111,7 +111,7 @@ export const boldWebhook = onRequest(
     const receivedSignature = req.header("x-bold-signature") ?? "";
 
     const expectedSignature = crypto
-      .createHmac("sha256", boldSecretKey.value())
+      .createHmac("sha256", boldSecretKey.value().trim())
       .update(rawBody.toString("base64"))
       .digest("hex");
 
