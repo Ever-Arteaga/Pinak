@@ -19,7 +19,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { db } from "./firebase";
+import { updateProfile } from "firebase/auth";
+import { auth, db } from "./firebase";
 import { isAuthBootstrapping, useAuthUser } from "./auth";
 import { ensureBusiness } from "./businessApi";
 import { pickActiveBusiness, sortBusinesses } from "./businessSelect";
@@ -202,6 +203,21 @@ export async function updateBusinessProfile(
   }
 ) {
   await updateDoc(doc(db, "businesses", businessId), { ...datos });
+  // Si es el negocio principal (id == uid), mantiene sincronizados el perfil y el nombre de la cuenta.
+  const current = auth.currentUser;
+  if (current && current.uid === businessId) {
+    await Promise.allSettled([
+      updateDoc(doc(db, "users", businessId), {
+        businessName: datos.name,
+        businessType: datos.businessType,
+        phone: datos.phone,
+        city: datos.city,
+        nit: datos.nit,
+        description: datos.description,
+      }),
+      updateProfile(current, { displayName: datos.name }),
+    ]);
+  }
 }
 
 // ---------------------------------------------------------------------------

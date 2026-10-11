@@ -2,12 +2,20 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { loginUser, loginWithGoogle, registerUser } from "@/lib/auth";
+import { loginUser, loginWithGoogle, registerUser, sendPasswordReset } from "@/lib/auth";
+import { PlanIntro, readIntroPlan } from "@/components/PlanIntro";
+import { useEffect } from "react";
 import { PinakLogoFull } from "@/components/PinakLogo";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register" | "reset">("login");
+  const [info, setInfo] = useState<string | null>(null);
+  const [chosenPlan, setChosenPlan] = useState<string | null>(null);
+
+  useEffect(() => {
+    setChosenPlan(readIntroPlan());
+  }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [businessName, setBusinessName] = useState("");
@@ -17,23 +25,42 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setInfo(null);
     setLoading(true);
     try {
+      if (mode === "reset") {
+        await sendPasswordReset(email);
+        setInfo(
+          "Si ese correo está registrado, te enviamos un enlace para crear una nueva contraseña. Revisa tu bandeja de entrada y también spam."
+        );
+        return;
+      }
       if (mode === "login") {
         await loginUser(email, password);
       } else {
         await registerUser(email, password, businessName);
       }
-      router.push("/dashboard");
+      router.push(afterAuthPath());
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? traducirErrorFirebase(err.message)
-          : "Ocurrió un error inesperado."
-      );
+      if (mode === "reset" && err instanceof Error && err.message.includes("auth/user-not-found")) {
+        setInfo(
+          "Si ese correo está registrado, te enviamos un enlace para crear una nueva contraseña. Revisa tu bandeja de entrada y también spam."
+        );
+      } else {
+        setError(
+          err instanceof Error
+            ? traducirErrorFirebase(err.message)
+            : "Ocurrió un error inesperado."
+        );
+      }
     } finally {
       setLoading(false);
     }
+  }
+
+  function afterAuthPath() {
+    const plan = readIntroPlan();
+    return plan === "pro" || plan === "premium" ? "/upgrade" : "/dashboard";
   }
 
   async function handleGoogleSignIn() {
@@ -41,7 +68,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await loginWithGoogle();
-      router.push("/dashboard");
+      router.push(afterAuthPath());
     } catch (err) {
       setError(
         err instanceof Error
@@ -55,6 +82,12 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-cream px-6">
+      <PlanIntro
+        onChoose={(plan) => {
+          setChosenPlan(plan);
+          setMode("register");
+        }}
+      />
       <div className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
           <PinakLogoFull width={190} />
@@ -62,14 +95,23 @@ export default function LoginPage() {
 
         <div className="rounded-2xl border border-line bg-white p-8 shadow-sm">
           <h1 className="font-display text-xl font-semibold text-navy-900">
-            {mode === "login" ? "Bienvenido de nuevo" : "Crea tu cuenta"}
+            {mode === "login"
+              ? "Bienvenido de nuevo"
+              : mode === "reset"
+              ? "Recupera tu contraseña"
+              : "Crea tu cuenta"}
           </h1>
           <p className="mt-1 text-sm text-ink-soft">
             {mode === "login"
               ? "Ingresa a tu negocio en piloto automático."
+              : mode === "reset"
+              ? "Te enviaremos un enlace a tu correo para crear una nueva."
+              : chosenPlan === "pro" || chosenPlan === "premium"
+              ? `Elegiste el plan ${chosenPlan === "pro" ? "Pro" : "Premium"}: crea tu cuenta y activa el pago.`
               : "Empieza gratis, sin tarjeta de crédito."}
           </p>
 
+          {mode !== "reset" && (<>
           <button
             type="button"
             onClick={handleGoogleSignIn}
@@ -85,6 +127,7 @@ export default function LoginPage() {
             <span className="text-xs text-ink-soft">o con tu correo</span>
             <div className="h-px flex-1 bg-line" />
           </div>
+          </>)}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {mode === "register" && (
@@ -117,7 +160,7 @@ export default function LoginPage() {
               />
             </div>
 
-            <div>
+            {mode !== "reset" && (<div>
               <label className="mb-1 block text-sm font-medium text-ink">
                 Contraseña
               </label>
@@ -130,8 +173,20 @@ export default function LoginPage() {
                 className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
                 placeholder="Mínimo 6 caracteres"
               />
-            </div>
+              {mode === "login" && (
+                <button
+                  type="button"
+                  onClick={() => { setMode("reset"); setError(null); setInfo(null); }}
+                  className="mt-1.5 text-xs font-medium text-green-600 hover:underline"
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              )}
+            </div>)}
 
+            {info && (
+              <p className="rounded-lg bg-green-100 px-3 py-2 text-sm text-green-600">{info}</p>
+            )}
             {error && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-danger">
                 {error}
@@ -145,6 +200,8 @@ export default function LoginPage() {
             >
               {loading
                 ? "Un momento..."
+                : mode === "reset"
+                ? "Enviar enlace"
                 : mode === "login"
                 ? "Ingresar"
                 : "Crear cuenta gratis"}
@@ -154,13 +211,16 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={() => {
-              setMode(mode === "login" ? "register" : "login");
+              setMode(mode === "register" ? "login" : mode === "reset" ? "login" : "register");
               setError(null);
+              setInfo(null);
             }}
             className="mt-5 w-full text-center text-sm text-ink-soft hover:text-navy-900"
           >
             {mode === "login"
               ? "¿No tienes cuenta? Regístrate gratis"
+              : mode === "reset"
+              ? "Volver a iniciar sesión"
               : "¿Ya tienes cuenta? Inicia sesión"}
           </button>
         </div>
@@ -201,6 +261,9 @@ function traducirErrorFirebase(message: string): string {
     return "No encontramos una cuenta con ese correo.";
   if (message.includes("auth/weak-password"))
     return "La contraseña debe tener al menos 6 caracteres.";
+  if (message.includes("auth/invalid-email")) return "El correo no es válido.";
+  if (message.includes("auth/too-many-requests"))
+    return "Demasiados intentos. Espera unos minutos e inténtalo de nuevo.";
   if (message.includes("auth/popup-closed-by-user"))
     return "Cerraste la ventana de Google antes de terminar.";
   if (message.includes("auth/unauthorized-domain"))

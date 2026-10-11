@@ -5,6 +5,7 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -97,4 +98,12 @@ export async function loginWithGoogle() {
 
 export async function logoutUser() {
   await signOut(auth);
+}
+
+/** Envía el correo para restablecer la contraseña (en español). */
+export async function sendPasswordReset(email: string) {
+  auth.languageCode = "es";
+  await sendPasswordResetEmail(auth, email.trim(), {
+    url: `${window.location.origin}/login`,
+  });
 }

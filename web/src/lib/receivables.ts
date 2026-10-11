@@ -108,9 +108,10 @@ export function buildWhatsAppCollectionLink(
   receivable: Receivable
 ): string {
   const monto = currency.format(receivable.amount);
+  const negocio = businessName.trim() || "mi negocio";
   const mensaje =
-    `¡Hola ${receivable.clientName}! 👋 Te escribo de ${businessName} para recordarte ` +
-    `tu saldo pendiente de ${monto}. Puedes pagarlo fácilmente por Neui o PSE ` +
+    `¡Hola ${receivable.clientName}! 👋 Te escribo de ${negocio} para recordarte ` +
+    `tu saldo pendiente de ${monto}. Puedes pagarlo fácilmente por Nequi o PSE ` +
     `cuando gustes. ¡Gracias por tu confianza! 🙌`;
 
   const phone = normalizePhoneNumber(receivable.clientPhone);
