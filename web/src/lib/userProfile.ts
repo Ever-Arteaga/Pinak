@@ -1,21 +1,17 @@
 "use client";
 
-import { doc, onSnapshot, updateDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { db } from "./firebase";
 import type { Plan } from "@/types/pinak";
 
-export interface UserProfileData {
-  email: string;
+interface UserProfileData {
   businessName: string;
-  businessType: string;
-  phone: string;
-  city: string;
-  nit: string;
-  description: string;
   plan: Plan;
   privacyModeEnabled: boolean;
-  createdAt: Date | null;
+  planTrial: boolean;
+  planExpiresAt: Date | null;
+  trialsUsed: { pro: boolean; premium: boolean };
 }
 
 /** Hook en tiempo real con el perfil del negocio del usuario (incluye el plan actual). */
@@ -36,16 +32,15 @@ export function useUserProfile(userId: string | undefined) {
       setProfile(
         data
           ? {
-              email: data.email ?? "",
               businessName: data.businessName ?? "",
-              businessType: data.businessType ?? "",
-              phone: data.phone ?? "",
-              city: data.city ?? "",
-              nit: data.nit ?? "",
-              description: data.description ?? "",
               plan: (data.plan as Plan) ?? "emprendedor",
               privacyModeEnabled: data.privacyModeEnabled === true,
-              createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
+              planTrial: data.planTrial === true,
+              planExpiresAt: data.planExpiresAt?.toDate?.() ?? null,
+              trialsUsed: {
+                pro: data.trialsUsed?.pro === true,
+                premium: data.trialsUsed?.premium === true,
+              },
             }
           : null
       );
@@ -56,20 +51,4 @@ export function useUserProfile(userId: string | undefined) {
   }, [userId]);
 
   return { profile, loading };
-}
-
-/** Actualiza los datos editables del perfil de la empresa (nunca el plan: lo bloquean las reglas de Firestore). */
-export async function updateBusinessProfile(
-  userId: string,
-  datos: {
-    businessName: string;
-    businessType: string;
-    phone: string;
-    city: string;
-    nit: string;
-    description: string;
-  }
-) {
-  const ref = doc(db, "users", userId);
-  await updateDoc(ref, { ...datos });
 }

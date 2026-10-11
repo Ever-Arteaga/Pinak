@@ -168,3 +168,4 @@ export {
   removeMember,
 } from "./businesses";
 export { generateDiagnosis } from "./diagnosis";
+export { startTrial } from "./trials";

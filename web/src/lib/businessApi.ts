@@ -40,6 +40,7 @@ function callable<TIn, TOut>(name: string) {
 export const ensureBusiness = callable<{ businessName?: string }, { businessId: string; created: boolean }>(
   "ensureBusiness"
 );
+export const startTrial = callable<{ plan: "pro" | "premium" }, { plan: string; days: number }>("startTrial");
 export const createBusiness = callable<
   { name: string; businessType?: string; phone?: string; city?: string },
   { businessId: string }

@@ -230,3 +230,33 @@ export function planTrim(businesses: OwnedBusinessInfo[], plan: Plan): TrimResul
     removeMembers,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Prueba gratuita de 15 días (una vez por plan y por cuenta)
+// ---------------------------------------------------------------------------
+export const TRIAL_DAYS = 15;
+
+export function trialDecision(input: {
+  target: unknown;
+  currentPlan: Plan;
+  currentIsTrial: boolean;
+  trialsUsed: Partial<Record<Plan, boolean>>;
+}): Refusal | null {
+  if (input.target !== "pro" && input.target !== "premium") {
+    return { code: "invalid-argument", message: "Plan no válido para la prueba gratuita." };
+  }
+  const target: Plan = input.target;
+  if (input.trialsUsed[target]) {
+    return { code: "already-exists", message: `Ya usaste tu prueba gratuita del plan ${PLAN_NAMES[target]}.` };
+  }
+  if (input.currentPlan === target) {
+    return { code: "failed-precondition", message: `Ya tienes el plan ${PLAN_NAMES[target]}.` };
+  }
+  if (input.currentPlan !== "emprendedor" && !input.currentIsTrial) {
+    return { code: "failed-precondition", message: "Ya tienes un plan de pago activo." };
+  }
+  if (input.currentPlan === "premium") {
+    return { code: "failed-precondition", message: "Ya estás probando un plan superior." };
+  }
+  return null;
+}

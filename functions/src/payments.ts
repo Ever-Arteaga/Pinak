@@ -187,7 +187,7 @@ export const boldWebhook = onRequest(
     );
 
     await db.doc(`users/${intent.uid}`).set(
-      { plan: intent.plan, planExpiresAt, planUpdatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      { plan: intent.plan, planTrial: false, planExpiresAt, planUpdatedAt: admin.firestore.FieldValue.serverTimestamp() },
       { merge: true }
     );
 
@@ -243,7 +243,7 @@ export const downgradeExpiredPlans = onSchedule(
 
     const batch = db.batch();
     expired.docs.forEach((doc) => {
-      batch.update(doc.ref, { plan: "emprendedor" });
+      batch.update(doc.ref, { plan: "emprendedor", planTrial: false });
     });
     await batch.commit();
 
