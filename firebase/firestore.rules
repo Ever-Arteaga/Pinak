@@ -62,7 +62,10 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['name', 'businessType', 'phone', 'city', 'nit', 'description']);
+            .hasOnly(['name', 'businessType', 'phone', 'city', 'nit', 'description'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2
+        && request.resource.data.name.size() <= 80;
 
       match /transactions/{transactionId} {
         allow read: if canAccess(businessId);
@@ -70,11 +73,25 @@ service cloud.firestore {
           && request.resource.data.keys().hasAll(['type', 'amount', 'category', 'method', 'date'])
           && request.resource.data.type in ['ingreso', 'egreso']
           && request.resource.data.amount is number
-          && request.resource.data.amount > 0;
+          && request.resource.data.amount > 0
+          && request.resource.data.amount <= 1000000000
+          && request.resource.data.category is string
+          && request.resource.data.category.size() > 0
+          && request.resource.data.category.size() <= 60
+          && request.resource.data.method in ['efectivo', 'nequi', 'daviplata', 'tarjeta', 'transferencia']
+          && (!('description' in request.resource.data) || request.resource.data.description == null
+              || (request.resource.data.description is string && request.resource.data.description.size() <= 200));
         allow update: if canAccess(businessId)
           && request.resource.data.type in ['ingreso', 'egreso']
           && request.resource.data.amount is number
-          && request.resource.data.amount > 0;
+          && request.resource.data.amount > 0
+          && request.resource.data.amount <= 1000000000
+          && request.resource.data.category is string
+          && request.resource.data.category.size() > 0
+          && request.resource.data.category.size() <= 60
+          && request.resource.data.method in ['efectivo', 'nequi', 'daviplata', 'tarjeta', 'transferencia']
+          && (!('description' in request.resource.data) || request.resource.data.description == null
+              || (request.resource.data.description is string && request.resource.data.description.size() <= 200));
         allow delete: if canAccess(businessId);
       }
 
@@ -86,11 +103,21 @@ service cloud.firestore {
         allow read: if canAccess(businessId);
         allow create: if canAccess(businessId)
           && request.resource.data.keys().hasAll(['clientName', 'amount', 'status'])
+          && request.resource.data.clientName is string
+          && request.resource.data.clientName.size() >= 2
+          && request.resource.data.clientName.size() <= 80
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
+          && request.resource.data.amount <= 1000000000
           && request.resource.data.status == 'pendiente';
         allow update: if canAccess(businessId)
-          && request.resource.data.status in ['pendiente', 'pagado', 'vencido'];
+          && request.resource.data.status in ['pendiente', 'pagado', 'vencido']
+          && request.resource.data.clientName is string
+          && request.resource.data.clientName.size() >= 2
+          && request.resource.data.clientName.size() <= 80
+          && request.resource.data.amount is number
+          && request.resource.data.amount > 0
+          && request.resource.data.amount <= 1000000000;
         allow delete: if canAccess(businessId);
       }
 

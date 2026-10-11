@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { loginUser, loginWithGoogle, registerUser, sendPasswordReset } from "@/lib/auth";
 import { PlanIntro, readIntroPlan } from "@/components/PlanIntro";
 import { useEffect } from "react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { PinakLogoFull } from "@/components/PinakLogo";
 
 export default function LoginPage() {
@@ -26,6 +27,18 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
     setInfo(null);
+    if (mode === "register" && businessName.trim().length < 2) {
+      setError("Escribe el nombre de tu negocio.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Escribe un correo válido.");
+      return;
+    }
+    if (mode !== "reset" && password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
     setLoading(true);
     try {
       if (mode === "reset") {
@@ -82,6 +95,7 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-cream px-6">
+      <ThemeToggle className="fixed right-4 top-4 z-40 p-2 text-ink-soft hover:bg-white" />
       <PlanIntro
         onChoose={(plan) => {
           setChosenPlan(plan);
@@ -129,7 +143,7 @@ export default function LoginPage() {
           </div>
           </>)}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
             {mode === "register" && (
               <div>
                 <label className="mb-1 block text-sm font-medium text-ink">

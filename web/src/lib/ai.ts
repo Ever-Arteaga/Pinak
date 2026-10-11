@@ -15,6 +15,7 @@ export interface AiParsedTransaction {
 interface ParseTransactionTextResult {
   transactions: AiParsedTransaction[];
   usage: { used: number; limit: number | null };
+  warnings?: string[];
 }
 
 export async function parseTransactionText(text: string, businessId: string): Promise<ParseTransactionTextResult> {
@@ -42,8 +43,11 @@ function traducirErrorIA(err: FunctionsError): string {
       return "Tu sesión expiró, vuelve a iniciar sesión.";
     case "functions/invalid-argument":
       return err.message || "El mensaje no es válido.";
-    case "functions/internal":
+    case "functions/failed-precondition":
+    case "functions/unavailable":
       return err.message || "No se pudo procesar el mensaje. Intenta de nuevo.";
+    case "functions/internal":
+      return "No se pudo procesar el mensaje. Intenta de nuevo en unos minutos.";
     default:
       return "No se pudo conectar con el asistente IA. Intenta de nuevo.";
   }

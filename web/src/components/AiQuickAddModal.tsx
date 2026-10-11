@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { addTransaction } from "@/lib/transactions";
 import { parseTransactionText, type AiParsedTransaction } from "@/lib/ai";
 import { useSpeechRecognition } from "@/lib/speech";
+import { MoneyInput } from "@/components/MoneyInput";
 
 const currency = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -31,6 +32,7 @@ export function AiQuickAddModal({ businessId, onClose }: { businessId: string; o
   const [step, setStep] = useState<Step>("input");
   const [text, setText] = useState("");
   const [candidates, setCandidates] = useState<AiParsedTransaction[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [usageInfo, setUsageInfo] = useState<{ used: number; limit: number | null } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -80,6 +82,7 @@ export function AiQuickAddModal({ businessId, onClose }: { businessId: string; o
         return;
       }
       setCandidates(result.transactions);
+      setWarnings(result.warnings ?? []);
       setUsageInfo(result.usage);
       setStep("preview");
     } catch (err) {
@@ -198,6 +201,12 @@ export function AiQuickAddModal({ businessId, onClose }: { businessId: string; o
               </p>
             )}
 
+            {warnings.map((w) => (
+              <p key={w} className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                ⚠️ {w}
+              </p>
+            ))}
+
             <div className="flex max-h-72 flex-col gap-2 overflow-y-auto">
               {candidates.map((c, i) => (
                 <div key={i} className="rounded-xl border border-line p-3">
@@ -234,12 +243,12 @@ export function AiQuickAddModal({ businessId, onClose }: { businessId: string; o
                       ✕
                     </button>
                   </div>
-                  <input
-                    type="number"
-                    value={c.amount}
-                    onChange={(e) => updateCandidate(i, { amount: Number(e.target.value) })}
-                    className="mt-2 w-full rounded-lg border border-line px-3 py-1.5 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-                  />
+                  <div className="mt-2">
+                    <MoneyInput
+                      value={String(c.amount || "")}
+                      onChange={(d) => updateCandidate(i, { amount: Number(d) })}
+                    />
+                  </div>
                 </div>
               ))}
 

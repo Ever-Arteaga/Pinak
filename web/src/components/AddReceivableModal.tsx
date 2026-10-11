@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { addReceivable, deleteReceivable, updateReceivable } from "@/lib/receivables";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { MoneyInput } from "@/components/MoneyInput";
+import { MAX_AMOUNT } from "@/lib/money";
 import type { Receivable } from "@/types/pinak";
 
 export function AddReceivableModal({
@@ -28,13 +30,30 @@ export function AddReceivableModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
+    const name = clientName.trim();
     const numericAmount = Number(amount);
-    if (!clientName || !numericAmount || numericAmount <= 0) return;
+    if (name.length < 2) {
+      setError("Escribe el nombre del cliente.");
+      return;
+    }
+    const phoneDigits = clientPhone.replace(/\D/g, "");
+    if (clientPhone.trim() && (phoneDigits.length < 7 || phoneDigits.length > 15)) {
+      setError("El número de WhatsApp no parece válido.");
+      return;
+    }
+    if (!numericAmount || numericAmount <= 0) {
+      setError("Escribe un monto mayor a cero.");
+      return;
+    }
+    if (numericAmount > MAX_AMOUNT) {
+      setError("El monto es demasiado alto. Revisa que no tenga ceros de más.");
+      return;
+    }
 
     setSaving(true);
-    setError(null);
     try {
-      const payload = { clientName, clientPhone, amount: numericAmount };
+      const payload = { clientName: name, clientPhone: clientPhone.trim(), amount: numericAmount };
       if (isEditing && editingReceivable) {
         await updateReceivable(businessId, editingReceivable.id, payload);
       } else {
@@ -82,14 +101,14 @@ export function AddReceivableModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium text-ink">
               Nombre del cliente
             </label>
             <input
               type="text"
-              required
+              maxLength={80}
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
               placeholder="Ej. María Rodríguez"
@@ -115,16 +134,7 @@ export function AddReceivableModal({
 
           <div>
             <label className="mb-1 block text-sm font-medium text-ink">Monto adeudado</label>
-            <input
-              type="number"
-              inputMode="decimal"
-              required
-              min={1}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="$0"
-              className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-            />
+            <MoneyInput value={amount} onChange={setAmount} />
           </div>
 
           {error && (

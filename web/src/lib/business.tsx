@@ -119,12 +119,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         setReady(true);
       },
       (err) => {
-        const code = (err as { code?: string })?.code ?? "desconocido";
-        setError(
-          code === "permission-denied"
-            ? "Falta publicar las reglas de la base de datos (permission-denied). Ejecuta: firebase deploy --only firestore:rules"
-            : `No se pudo cargar tu negocio (${code}). Revisa tu conexión e intenta de nuevo.`
-        );
+        console.error("No se pudo cargar el negocio:", err);
+        setError("No pudimos cargar tu negocio. Intenta de nuevo en unos minutos.");
         setReady(true);
       }
     );

@@ -12,6 +12,7 @@ const db = admin.firestore();
 
 const VALID_METHODS = ["efectivo", "nequi", "daviplata", "tarjeta", "transferencia"];
 const VALID_TYPES = ["ingreso", "egreso"];
+const MAX_AMOUNT = 1_000_000_000;
 
 interface ParsedTransaction {
   type: "ingreso" | "egreso";
@@ -108,20 +109,29 @@ export const parseTransactionText = onCall(
 
     const ai = new GoogleGenAI({ apiKey: geminiApiKey.value() });
 
-    let raw: string;
-    try {
-      const response = await ai.models.generateContent({
-        model: MODEL,
-        contents: text,
-        config: {
-          systemInstruction: SYSTEM_PROMPT,
-          responseMimeType: "application/json",
-        },
-      });
-      raw = response.text ?? "[]";
-    } catch (err) {
-      logger.error("Error llamando a la API de Gemini", err);
-      throw new HttpsError("internal", "No se pudo procesar el mensaje con IA. Intenta de nuevo.");
+    let raw = "[]";
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model: MODEL,
+          contents: text,
+          config: {
+            systemInstruction: SYSTEM_PROMPT,
+            responseMimeType: "application/json",
+          },
+        });
+        raw = response.text ?? "[]";
+        lastErr = null;
+        break;
+      } catch (err) {
+        lastErr = err;
+        logger.warn("Fallo al llamar a Gemini", { attempt, err });
+      }
+    }
+    if (lastErr) {
+      logger.error("Error llamando a la API de Gemini", lastErr);
+      throw new HttpsError("unavailable", "El asistente no está disponible en este momento. Intenta de nuevo en unos minutos.");
     }
 
     let parsed: unknown;
@@ -130,11 +140,11 @@ export const parseTransactionText = onCall(
       parsed = JSON.parse(cleaned);
     } catch (err) {
       logger.error("Respuesta de Gemini no es JSON válido", { raw, err });
-      throw new HttpsError("internal", "La IA no devolvió un formato válido. Intenta reformular.");
+      throw new HttpsError("failed-precondition", "No pude entender el mensaje. Intenta escribirlo de otra forma, con montos y si fue ingreso o gasto.");
     }
 
     if (!Array.isArray(parsed)) {
-      throw new HttpsError("internal", "La IA no devolvió una lista de transacciones.");
+      throw new HttpsError("failed-precondition", "No pude entender el mensaje. Intenta escribirlo de otra forma.");
     }
 
     const transactions: ParsedTransaction[] = parsed
@@ -146,13 +156,33 @@ export const parseTransactionText = onCall(
         method: VALID_METHODS.includes(String(t.method)) ? String(t.method) : "efectivo",
         description: t.description ? String(t.description).slice(0, 200) : undefined,
       }))
-      .filter((t) => t.amount > 0);
+      .filter((t) => t.amount > 0)
+      .slice(0, 20);
+
+    // Revisiones de coherencia: el servidor avisa, la persona decide.
+    const warnings: string[] = [];
+    const cop = (n: number) =>
+      new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
+    const ingresos = transactions.filter((t) => t.type === "ingreso").reduce((a, t) => a + t.amount, 0);
+    const egresos = transactions.filter((t) => t.type === "egreso").reduce((a, t) => a + t.amount, 0);
+    if (ingresos > 0 && egresos > ingresos) {
+      warnings.push(
+        `Los gastos (${cop(egresos)}) superan a las ventas (${cop(ingresos)}) en este mensaje. Revisa que los montos estén bien escritos.`
+      );
+    }
+    for (const t of transactions) {
+      if (t.amount > MAX_AMOUNT) {
+        warnings.push(`El monto ${cop(t.amount)} es muy alto. Revisa que no tenga ceros de más.`);
+        t.amount = MAX_AMOUNT;
+      }
+    }
 
     logger.info("Transacciones detectadas por IA", { uid, count: transactions.length });
 
     return {
       transactions,
       usage: usageAfter,
+      warnings,
     };
   }
 );

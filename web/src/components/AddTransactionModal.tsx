@@ -4,6 +4,8 @@ import { useState } from "react";
 import { addTransaction, deleteTransaction, updateTransaction } from "@/lib/transactions";
 import { addCategory, useCategories } from "@/lib/categories";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { MoneyInput } from "@/components/MoneyInput";
+import { MAX_AMOUNT } from "@/lib/money";
 import type { PaymentMethod, Transaction, TransactionType } from "@/types/pinak";
 
 const METHODS: { value: PaymentMethod; label: string }[] = [
@@ -42,14 +44,24 @@ export function AddTransactionModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     const numericAmount = Number(amount);
-    if (!numericAmount || numericAmount <= 0) return;
+    if (!numericAmount || numericAmount <= 0) {
+      setError("Escribe un monto mayor a cero.");
+      return;
+    }
+    if (numericAmount > MAX_AMOUNT) {
+      setError("El monto es demasiado alto. Revisa que no tenga ceros de más.");
+      return;
+    }
 
     const finalCategory = addingCustom ? customCategory.trim() : category;
-    if (!finalCategory) return;
+    if (!finalCategory) {
+      setError("Elige o escribe una categoría.");
+      return;
+    }
 
     setSaving(true);
-    setError(null);
     try {
       const alreadyExists = categoriesForType.some(
         (c) => c.name.toLowerCase() === finalCategory.toLowerCase()
@@ -145,19 +157,10 @@ export function AddTransactionModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium text-ink">Monto</label>
-            <input
-              type="number"
-              inputMode="decimal"
-              required
-              min={1}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="$0"
-              className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
-            />
+            <MoneyInput value={amount} onChange={setAmount} />
           </div>
 
           <div>
