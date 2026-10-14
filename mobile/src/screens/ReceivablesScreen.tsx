@@ -22,7 +22,7 @@ const currency = new Intl.NumberFormat("es-CO", {
 export default function ReceivablesScreen({ onBack }: { onBack: () => void }) {
   const { business } = useBusiness();
   const { money } = usePrivacy();
-  const { receivables, loading } = useReceivables(business?.id);
+  const { receivables, loading, error, retry } = useReceivables(business?.id);
   const [showModal, setShowModal] = useState(false);
   const [editingReceivable, setEditingReceivable] = useState<Receivable | null>(null);
 
@@ -58,8 +58,16 @@ export default function ReceivablesScreen({ onBack }: { onBack: () => void }) {
 
             <Text style={styles.sectionTitle}>Cuentas por cobrar</Text>
 
+            {error && (
+              <View style={{ alignItems: "center", paddingVertical: 12 }}>
+                <Text style={[styles.emptyText, { color: colors.danger }]}>{error}</Text>
+                <TouchableOpacity onPress={retry}>
+                  <Text style={{ color: colors.title, fontWeight: "700" }}>Reintentar</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             {loading && <Text style={styles.emptyText}>Cargando fiados...</Text>}
-            {!loading && receivables.length === 0 && (
+            {!loading && !error && receivables.length === 0 && (
               <Text style={styles.emptyText}>
                 Sin fiados registrados. Cuando un cliente te deba, regístralo aquí.
               </Text>

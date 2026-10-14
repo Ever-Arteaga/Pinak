@@ -14,7 +14,7 @@ pinak/
   web/                    # Next.js 15 + TypeScript + Tailwind (export estático)
   mobile/                 # Expo SDK 54 (React Native) + TypeScript
   firebase.json           # Config del Firebase CLI
-  .firebaserc             # Referencia al proyecto pinak-dev
+  .firebaserc             # Alias dev/prod → proyecto pinak-dev
 ```
 
 ## Qué incluye
@@ -67,7 +67,9 @@ Los límites los aplica el servidor (`functions/src/plans.ts`); `web/src/types/p
 
 ## Configuración de Firebase
 
-Proyecto: **pinak-dev**
+Proyecto: **pinak-dev** (alias `dev` y `prod` en `.firebaserc`; hoy es el mismo proyecto)
+
+La URL de redirección de Bold en la app móvil se configura en `app.json` → `extra.boldRedirectUrl` y debe estar en la lista de dominios permitidos de `functions/src/payments.ts`.
 
 1. Firebase Console → Authentication → Sign-in method → activa **Email/Password**
    y **Google**.
@@ -194,3 +196,9 @@ usando [Bold](https://bold.co) (pasarela colombiana — Nequi, PSE, tarjetas).
 - En Codespaces, `firebase login` requiere el flag `--no-localhost`.
 - Nunca subas `google-services.json`, `GoogleService-Info.plist`,
   `mobile/app.json` ni `web/.env.local` — están en `.gitignore` a propósito.
+
+
+## Resúmenes y App Check
+
+- **Resúmenes agregados:** el trigger `onTransactionWritten` mantiene `businesses/{id}/summaries/{day-*|month-*|all}`. Tras desplegarlo, recalcula los datos existentes UNA vez: `cd functions` → `$env:GOOGLE_APPLICATION_CREDENTIALS="ruta\cuenta-de-servicio.json"` → `npm run backfill`. Opcional: política TTL de Firestore sobre `summaryEvents.expireAt` para limpiar eventos viejos.
+- **App Check:** la web lo activa si defines `NEXT_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY` (clave reCAPTCHA Enterprise registrada en Firebase → App Check). El servidor solo lo EXIGE si `APP_CHECK_ENFORCE=true` en `functions/.env`. No lo actives mientras la app móvil no envíe tokens (requiere `@react-native-firebase/app-check` y un build nativo): sus llamadas serían rechazadas.

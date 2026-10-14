@@ -170,26 +170,7 @@ export function computeStats(input: {
     };
   }
 
-  // Fiados: vencido = marcado "vencido" o pendiente con fecha límite ya pasada.
-  let pendingCount = 0;
-  let pendingTotal = 0;
-  let overdueCount = 0;
-  let overdueTotal = 0;
-  let oldestOverdueMs: number | null = null;
-  for (const r of receivables) {
-    if (r.status !== "pendiente" && r.status !== "vencido") continue;
-    pendingCount += 1;
-    pendingTotal += r.amount;
-    const isOverdue =
-      r.status === "vencido" || (r.dueDateMs !== null && r.dueDateMs < nowMs);
-    if (isOverdue) {
-      overdueCount += 1;
-      overdueTotal += r.amount;
-      if (r.dueDateMs !== null && (oldestOverdueMs === null || r.dueDateMs < oldestOverdueMs)) {
-        oldestOverdueMs = r.dueDateMs;
-      }
-    }
-  }
+  const recStats = receivableStats(receivables, nowMs);
 
   return {
     month,
@@ -208,14 +189,102 @@ export function computeStats(input: {
     bestDay,
     previous,
     change,
-    receivables: {
-      pendingCount,
-      pendingTotal: Math.round(pendingTotal),
-      overdueCount,
-      overdueTotal: Math.round(overdueTotal),
-      oldestOverdueDays:
-        oldestOverdueMs === null ? null : Math.max(0, Math.floor((nowMs - oldestOverdueMs) / DAY_MS)),
-    },
+    receivables: recStats,
+  };
+}
+
+/** Fiados: vencido = marcado "vencido" o pendiente con fecha límite ya pasada. */
+export function receivableStats(receivables: ReceivableInput[], nowMs: number): DiagnosisStats["receivables"] {
+  let pendingCount = 0;
+  let pendingTotal = 0;
+  let overdueCount = 0;
+  let overdueTotal = 0;
+  let oldestOverdueMs: number | null = null;
+  for (const r of receivables) {
+    if (r.status !== "pendiente" && r.status !== "vencido") continue;
+    pendingCount += 1;
+    pendingTotal += r.amount;
+    const isOverdue = r.status === "vencido" || (r.dueDateMs !== null && r.dueDateMs < nowMs);
+    if (isOverdue) {
+      overdueCount += 1;
+      overdueTotal += r.amount;
+      if (r.dueDateMs !== null && (oldestOverdueMs === null || r.dueDateMs < oldestOverdueMs)) {
+        oldestOverdueMs = r.dueDateMs;
+      }
+    }
+  }
+  return {
+    pendingCount,
+    pendingTotal: Math.round(pendingTotal),
+    overdueCount,
+    overdueTotal: Math.round(overdueTotal),
+    oldestOverdueDays: oldestOverdueMs === null ? null : Math.max(0, Math.floor((nowMs - oldestOverdueMs) / DAY_MS)),
+  };
+}
+
+/** Resumen agregado de un día, un mes o todo el historial (lo mantiene el trigger de summaries.ts). */
+export interface SummaryDoc {
+  income: number;
+  expense: number;
+  count: number;
+  aiCount: number;
+  expenseByCategory: Record<string, number>;
+  incomeByCategory: Record<string, number>;
+  incomeByMethod: Record<string, number>;
+}
+
+const toMap = (o: Record<string, number> | undefined) => new Map(Object.entries(o ?? {}));
+
+/** Mismas estadísticas que computeStats, pero a partir de los resúmenes (sin leer transacciones). */
+export function statsFromSummaries(input: {
+  month: string;
+  summary: SummaryDoc;
+  previous: SummaryDoc | null;
+  /** Resúmenes diarios del mes, por id "day-YYYY-MM-DD". */
+  days: Record<string, SummaryDoc>;
+  receivables: ReceivableInput[];
+  nowMs: number;
+}): DiagnosisStats {
+  const { month, summary: m, previous: p, days, receivables, nowMs } = input;
+  const income = m.income;
+  const expenses = m.expense;
+
+  let bestDay: DiagnosisStats["bestDay"] = null;
+  for (const [id, d] of Object.entries(days)) {
+    if (d.income > 0 && (!bestDay || d.income > bestDay.income)) {
+      bestDay = { date: id.replace(/^day-/, ""), income: Math.round(d.income) };
+    }
+  }
+
+  let previous: DiagnosisStats["previous"] = null;
+  let change: DiagnosisStats["change"] = null;
+  if (p && p.count > 0) {
+    previous = {
+      income: Math.round(p.income),
+      expenses: Math.round(p.expense),
+      balance: Math.round(p.income - p.expense),
+    };
+    change = { incomePct: pctChange(income, p.income), expensesPct: pctChange(expenses, p.expense) };
+  }
+
+  return {
+    month,
+    income: Math.round(income),
+    expenses: Math.round(expenses),
+    balance: Math.round(income - expenses),
+    marginPct: income > 0 ? round1(((income - expenses) / income) * 100) : null,
+    txCount: m.count,
+    topExpenseCategories: shares(toMap(m.expenseByCategory), expenses, 5),
+    topIncomeCategories: shares(toMap(m.incomeByCategory), income, 3),
+    incomeByMethod: shares(toMap(m.incomeByMethod), income, 5).map((x) => ({
+      method: x.category,
+      amount: x.amount,
+      pct: x.pct,
+    })),
+    bestDay,
+    previous,
+    change,
+    receivables: receivableStats(receivables, nowMs),
   };
 }
 

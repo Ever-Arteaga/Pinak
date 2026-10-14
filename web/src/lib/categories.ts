@@ -2,7 +2,7 @@
 
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
 import type { Category, TransactionType } from "@/types/pinak";
 
 export function useCategories(businessId: string | undefined) {
@@ -47,6 +47,7 @@ export async function addCategory(businessId: string, name: string, type: Transa
     icon: "🏷️",
     isDefault: false,
     createdAt: serverTimestamp(),
+    createdBy: auth.currentUser?.uid ?? "",
   });
 }
 

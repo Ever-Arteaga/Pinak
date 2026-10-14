@@ -109,3 +109,10 @@ function traducirErrorPago(err: FunctionsError): string {
       return "No se pudo iniciar el pago. Intenta de nuevo.";
   }
 }
+
+/** Estado de un pago ("pending" | "processing" | "completed"); solo lo ve el dueño del pago. */
+export async function getCheckoutStatus(orderId: string): Promise<string> {
+  const callable = httpsCallable<{ orderId: string }, { status: string }>(functions, "getCheckoutStatus");
+  const res = await callable({ orderId });
+  return res.data.status;
+}

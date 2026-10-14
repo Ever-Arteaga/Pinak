@@ -16,7 +16,7 @@ import type { Receivable } from "@/types/pinak";
 export default function ReceivablesPage() {
   const { business } = useBusiness();
   const { money } = usePrivacy();
-  const { receivables, loading } = useReceivables(business?.id);
+  const { receivables, loading, error, retry } = useReceivables(business?.id);
   const [showModal, setShowModal] = useState(false);
   const [editingReceivable, setEditingReceivable] = useState<Receivable | null>(null);
 
@@ -55,13 +55,24 @@ export default function ReceivablesPage() {
           </h2>
 
           <div className="mt-3 flex flex-col gap-3 lg:grid lg:grid-cols-2">
+            {error && (
+              <div className="px-4 py-6 text-center">
+                <p className="text-sm text-danger">{error}</p>
+                <button
+                  onClick={retry}
+                  className="mt-3 rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-navy-800"
+                >
+                  Reintentar
+                </button>
+              </div>
+            )}
             {loading && (
               <p className="rounded-2xl border border-line bg-white px-4 py-6 text-center text-sm text-ink-soft">
                 Cargando fiados...
               </p>
             )}
 
-            {!loading && receivables.length === 0 && (
+            {!loading && !error && receivables.length === 0 && (
               <div className="rounded-2xl border border-line bg-white px-4 py-8 text-center">
                 <p className="text-sm font-medium text-ink">Sin fiados registrados</p>
                 <p className="mt-1 text-sm text-ink-soft">

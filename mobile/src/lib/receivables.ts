@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { Linking } from "react-native";
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
 import type { Receivable } from "../types/pinak";
 
 interface NewReceivableInput {
@@ -32,6 +32,7 @@ export async function addReceivable(businessId: string, input: NewReceivableInpu
     status: "pendiente",
     dueDate: input.dueDate ? Timestamp.fromDate(input.dueDate) : null,
     createdAt: serverTimestamp(),
+    createdBy: auth.currentUser?.uid ?? "",
   });
 }
 
@@ -61,6 +62,8 @@ export async function deleteReceivable(businessId: string, receivableId: string)
 export function useReceivables(businessId: string | undefined) {
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!businessId) {
@@ -69,6 +72,7 @@ export function useReceivables(businessId: string | undefined) {
       return;
     }
 
+    setError(null);
     const q = query(
       collection(db, "businesses", businessId, "receivables"),
       orderBy("createdAt", "desc")
@@ -89,12 +93,21 @@ export function useReceivables(businessId: string | undefined) {
       });
       setReceivables(items);
       setLoading(false);
-    }, () => setLoading(false));
+    }, (err) => {
+      console.error("No se pudieron cargar los datos:", err);
+      setError("No pudimos cargar tus datos. Revisa tu conexión e intenta de nuevo.");
+      setLoading(false);
+    });
 
     return unsubscribe;
-  }, [businessId]);
+  }, [businessId, attempt]);
 
-  return { receivables, loading };
+  const retry = () => {
+    setLoading(true);
+    setAttempt((n) => n + 1);
+  };
+
+  return { receivables, loading, error, retry };
 }
 
 const currency = new Intl.NumberFormat("es-CO", {

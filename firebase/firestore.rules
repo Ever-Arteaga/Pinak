@@ -76,10 +76,11 @@ service cloud.firestore {
       match /transactions/{transactionId} {
         allow read: if canAccess(businessId);
         allow create: if canAccess(businessId)
-          && request.resource.data.keys().hasAll(['type', 'amount', 'category', 'method', 'date'])
-          && request.resource.data.keys().hasOnly(['type', 'amount', 'category', 'method', 'description', 'date', 'source', 'createdAt'])
+          && request.resource.data.keys().hasAll(['type', 'amount', 'category', 'method', 'date', 'createdAt', 'createdBy'])
+          && request.resource.data.keys().hasOnly(['type', 'amount', 'category', 'method', 'description', 'date', 'source', 'createdAt', 'createdBy'])
           && request.resource.data.date is timestamp
-          && (!('createdAt' in request.resource.data) || request.resource.data.createdAt == request.time)
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
           && (!('source' in request.resource.data) || request.resource.data.source in ['manual', 'ia_voz', 'ia_texto'])
           && request.resource.data.type in ['ingreso', 'egreso']
           && request.resource.data.amount is number
@@ -111,27 +112,30 @@ service cloud.firestore {
       match /categories/{categoryId} {
         allow read, delete: if canAccess(businessId);
         allow create: if canAccess(businessId)
-          && request.resource.data.keys().hasOnly(['name', 'type', 'icon', 'isDefault', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['name', 'type', 'icon', 'isDefault', 'createdAt', 'createdBy'])
           && request.resource.data.name is string
-          && request.resource.data.name.size() > 0
-          && request.resource.data.name.size() <= 60
+          && request.resource.data.name.size() >= 1
+          && request.resource.data.name.size() <= 40
+          && (!('icon' in request.resource.data) || (request.resource.data.icon is string && request.resource.data.icon.size() <= 8))
           && request.resource.data.type in ['ingreso', 'egreso']
           && request.resource.data.createdAt == request.time;
         allow update: if canAccess(businessId)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'icon'])
           && request.resource.data.name is string
-          && request.resource.data.name.size() > 0
-          && request.resource.data.name.size() <= 60;
+          && request.resource.data.name.size() >= 1
+          && request.resource.data.name.size() <= 40
+          && (!('icon' in request.resource.data) || (request.resource.data.icon is string && request.resource.data.icon.size() <= 8));
       }
 
       match /receivables/{receivableId} {
         allow read: if canAccess(businessId);
         allow create: if canAccess(businessId)
-          && request.resource.data.keys().hasAll(['clientName', 'amount', 'status'])
-          && request.resource.data.keys().hasOnly(['clientName', 'clientPhone', 'amount', 'status', 'dueDate', 'createdAt'])
+          && request.resource.data.keys().hasAll(['clientName', 'amount', 'status', 'createdAt', 'createdBy'])
+          && request.resource.data.keys().hasOnly(['clientName', 'clientPhone', 'amount', 'status', 'dueDate', 'createdAt', 'createdBy'])
+          && request.resource.data.createdBy == request.auth.uid
           && (!('clientPhone' in request.resource.data) || (request.resource.data.clientPhone is string && request.resource.data.clientPhone.size() <= 20))
           && (!('dueDate' in request.resource.data) || request.resource.data.dueDate == null || request.resource.data.dueDate is timestamp)
-          && (!('createdAt' in request.resource.data) || request.resource.data.createdAt == request.time)
+          && request.resource.data.createdAt == request.time
           && request.resource.data.clientName is string
           && request.resource.data.clientName.size() >= 2
           && request.resource.data.clientName.size() <= 80
@@ -152,6 +156,12 @@ service cloud.firestore {
           && request.resource.data.amount > 0
           && request.resource.data.amount <= 1000000000;
         allow delete: if canAccess(businessId);
+      }
+
+      // Resúmenes por día, mes y total (los mantiene un trigger del servidor).
+      match /summaries/{summaryId} {
+        allow read: if canAccess(businessId);
+        allow write: if false;
       }
 
       // Contador de uso de la IA y diagnósticos: solo lectura para el equipo,

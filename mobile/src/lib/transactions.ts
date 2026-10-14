@@ -8,11 +8,13 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  limit,
   Timestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { db } from "./firebase";
+import { auth, db } from "./firebase";
 import type { Transaction } from "../types/pinak";
 
 interface NewTransactionInput {
@@ -37,6 +39,7 @@ export async function addTransaction(businessId: string, input: NewTransactionIn
     date: input.date ? Timestamp.fromDate(input.date) : serverTimestamp(),
     source: input.source ?? "manual",
     createdAt: serverTimestamp(),
+    createdBy: auth.currentUser?.uid ?? "",
   });
 }
 
@@ -61,9 +64,20 @@ export async function deleteTransaction(businessId: string, transactionId: strin
   await deleteDoc(ref);
 }
 
-export function useTransactions(businessId: string | undefined) {
+export interface TransactionsOptions {
+  /** Máximo de movimientos a escuchar (los más recientes). */
+  limit?: number;
+  /** Solo movimientos desde esta fecha. */
+  since?: Date;
+}
+
+export function useTransactions(businessId: string | undefined, opts: TransactionsOptions = {}) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const limitN = opts.limit ?? 0;
+  const sinceMs = opts.since ? opts.since.getTime() : 0;
 
   useEffect(() => {
     if (!businessId) {
@@ -72,9 +86,12 @@ export function useTransactions(businessId: string | undefined) {
       return;
     }
 
+    setError(null);
     const q = query(
       collection(db, "businesses", businessId, "transactions"),
-      orderBy("date", "desc")
+      ...(sinceMs ? [where("date", ">=", Timestamp.fromMillis(sinceMs))] : []),
+      orderBy("date", "desc"),
+      ...(limitN ? [limit(limitN)] : [])
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -94,12 +111,21 @@ export function useTransactions(businessId: string | undefined) {
       });
       setTransactions(items);
       setLoading(false);
-    }, () => setLoading(false));
+    }, (err) => {
+      console.error("No se pudieron cargar los datos:", err);
+      setError("No pudimos cargar tus datos. Revisa tu conexión e intenta de nuevo.");
+      setLoading(false);
+    });
 
     return unsubscribe;
-  }, [businessId]);
+  }, [businessId, attempt, limitN, sinceMs]);
 
-  return { transactions, loading };
+  const retry = () => {
+    setLoading(true);
+    setAttempt((n) => n + 1);
+  };
+
+  return { transactions, loading, error, retry };
 }
 
 export function computeBalance(transactions: Transaction[]) {

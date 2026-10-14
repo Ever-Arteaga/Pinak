@@ -3,6 +3,7 @@ import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 import { syncBusinessPlans } from "./businesses";
 import { normalizePlan, trialDecision, TRIAL_DAYS, type Plan } from "./plans";
+import { ENFORCE_APP_CHECK } from "./options";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -10,7 +11,7 @@ if (admin.apps.length === 0) {
 const db = admin.firestore();
 
 /** Activa 15 días gratis de Pro o Premium (una vez por plan y por cuenta). */
-export const startTrial = onCall({ region: "us-central1" }, async (request) => {
+export const startTrial = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, region: "us-central1" }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Inicia sesión para continuar.");
   const target = request.data?.plan;

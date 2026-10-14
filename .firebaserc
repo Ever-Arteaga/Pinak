@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "pinak-dev"
+    "default": "pinak-dev",
+    "dev": "pinak-dev",
+    "prod": "pinak-dev"
   }
 }

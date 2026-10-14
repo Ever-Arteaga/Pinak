@@ -2,7 +2,7 @@
   "name": "functions",
   "description": "Cloud Functions para PINAK (registro por IA, Fase 3)",
   "engines": {
-    "node": "22"
+    "node": "20"
   },
   "main": "lib/index.js",
   "scripts": {
@@ -11,7 +11,9 @@
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "test": "vitest run",
+    "backfill": "tsx scripts/backfillSummaries.ts"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",
@@ -19,7 +21,9 @@
     "firebase-functions": "^6.0.1"
   },
   "devDependencies": {
-    "typescript": "^5.5.4"
+    "tsx": "^4.23.15",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
   },
   "private": true
 }

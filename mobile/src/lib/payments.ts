@@ -1,4 +1,5 @@
 import { httpsCallable, type FunctionsError } from "firebase/functions";
+import Constants from "expo-constants";
 import { functions } from "./firebase";
 
 export type PayablePlan = "pro" | "premium";
@@ -18,7 +19,16 @@ export interface BoldCheckoutData {
 // redirección empiece con https://, por eso no se puede usar un esquema
 // personalizado (pinak://) aquí — el WebView detecta esta URL para saber
 // cuándo cerrar y devolver el control a la app.
-export const BOLD_REDIRECT_URL = "https://pinak-dev.web.app/upgrade/procesando/";
+// Se configura en app.json → extra.boldRedirectUrl (debe ser un dominio permitido por el servidor).
+const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, string | undefined>;
+export const BOLD_REDIRECT_URL = extra.boldRedirectUrl ?? "https://pinak-dev.web.app/upgrade/procesando/";
+
+/** Estado de un pago ("pending" | "processing" | "completed"); solo lo ve el dueño del pago. */
+export async function getCheckoutStatus(orderId: string): Promise<string> {
+  const callable = httpsCallable<{ orderId: string }, { status: string }>(functions, "getCheckoutStatus");
+  const res = await callable({ orderId });
+  return res.data.status;
+}
 
 /** Pide a la Cloud Function los datos firmados del checkout de Bold. */
 export async function createBoldCheckout(plan: PayablePlan): Promise<BoldCheckoutData> {

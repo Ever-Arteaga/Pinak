@@ -5,16 +5,18 @@ import { GoogleGenAI } from "@google/genai";
 import { geminiApiKey, MODEL } from "./gemini";
 import { normalizePlan, PLAN_LIMITS } from "./plans";
 import {
-  computeStats,
   isValidMonthId,
   monthIdOf,
   monthRange,
   previousMonthId,
   sanitizeDiagnosisText,
+  statsFromSummaries,
   type ReceivableInput,
-  type TxInput,
+  type SummaryDoc,
 } from "./diagnosisStats";
+import { buildSummaries, emptySummary, type SummaryTx } from "./summaryCalc";
 import { tsMs } from "./businesses";
+import { ENFORCE_APP_CHECK } from "./options";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -23,8 +25,91 @@ const db = admin.firestore();
 const Timestamp = admin.firestore.Timestamp;
 
 /** Tope de generaciones por negocio y mes: controla el costo de la IA. */
-const MAX_TX_PER_MONTH = 20000;
 const MAX_GENERATIONS_PER_MONTH = 3;
+
+
+const PAGE = 1000;
+const MAX_TX_FALLBACK = 20000;
+
+/** Resumen del mes y de sus días. Si aún no existe (datos anteriores al trigger), se arma leyendo por páginas. */
+async function loadMonth(
+  businessId: string,
+  month: string
+): Promise<{ summary: SummaryDoc; days: Record<string, SummaryDoc> }> {
+  const col = db.collection(`businesses/${businessId}/summaries`);
+  const monthSnap = await col.doc(`month-${month}`).get();
+  if (monthSnap.exists) {
+    const dayDocs = await col
+      .where(admin.firestore.FieldPath.documentId(), ">=", `day-${month}-01`)
+      .where(admin.firestore.FieldPath.documentId(), "<=", `day-${month}-31`)
+      .get();
+    const days: Record<string, SummaryDoc> = {};
+    dayDocs.docs.forEach((d) => (days[d.id] = { ...emptySummary(), ...(d.data() as Partial<SummaryDoc>) }));
+    return { summary: { ...emptySummary(), ...(monthSnap.data() as Partial<SummaryDoc>) }, days };
+  }
+
+  // Respaldo: leer las transacciones del mes por páginas (con tope explícito, nunca truncado en silencio).
+  const { startMs, endMs } = monthRange(month);
+  const txs: SummaryTx[] = [];
+  let last: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+  for (;;) {
+    let q = db
+      .collection(`businesses/${businessId}/transactions`)
+      .where("date", ">=", Timestamp.fromMillis(startMs))
+      .where("date", "<", Timestamp.fromMillis(endMs))
+      .orderBy("date")
+      .limit(PAGE);
+    if (last) q = q.startAfter(last);
+    const snap = await q.get();
+    for (const d of snap.docs) {
+      txs.push({
+        type: d.get("type") === "ingreso" ? "ingreso" : "egreso",
+        amount: Number(d.get("amount")) || 0,
+        category: String(d.get("category") || "Otros"),
+        method: String(d.get("method") || "efectivo"),
+        source: String(d.get("source") || "manual"),
+        dateMs: tsMs(d.get("date")),
+      });
+    }
+    if (snap.size < PAGE) break;
+    last = snap.docs[snap.docs.length - 1];
+    if (txs.length >= MAX_TX_FALLBACK) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Este mes tiene demasiados movimientos para analizarlos sin los resúmenes. Escríbenos para ayudarte."
+      );
+    }
+  }
+  const built = buildSummaries(txs);
+  const days: Record<string, SummaryDoc> = {};
+  for (const [id, v] of Object.entries(built)) if (id.startsWith("day-")) days[id] = v;
+  return { summary: built[`month-${month}`] ?? emptySummary(), days };
+}
+
+/** Fiados pendientes o vencidos, leídos por páginas. */
+async function loadPendingReceivables(businessId: string): Promise<ReceivableInput[]> {
+  const out: ReceivableInput[] = [];
+  let last: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+  for (;;) {
+    let q = db
+      .collection(`businesses/${businessId}/receivables`)
+      .where("status", "in", ["pendiente", "vencido"])
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(PAGE);
+    if (last) q = q.startAfter(last);
+    const snap = await q.get();
+    for (const d of snap.docs) {
+      out.push({
+        amount: Number(d.get("amount")) || 0,
+        status: String(d.get("status")),
+        dueDateMs: d.get("dueDate") ? tsMs(d.get("dueDate")) : null,
+      });
+    }
+    if (snap.size < PAGE) break;
+    last = snap.docs[snap.docs.length - 1];
+  }
+  return out;
+}
 
 const SYSTEM_PROMPT = `Eres el analista financiero de PINAK, una app para pequeños negocios en Colombia. Recibes las cifras YA CALCULADAS de un mes de un negocio y escribes un diagnóstico claro para su dueño, que no es experto en finanzas.
 
@@ -46,8 +131,7 @@ Reglas estrictas:
 - No des asesoría legal, tributaria ni de inversión. No prometas resultados.
 - Si no hay nada grave, "alerta" debe ser null.`;
 
-export const generateDiagnosis = onCall(
-  { secrets: [geminiApiKey], region: "us-central1", timeoutSeconds: 120 },
+export const generateDiagnosis = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, secrets: [geminiApiKey], region: "us-central1", timeoutSeconds: 120 },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Debes iniciar sesión para usar esta función.");
@@ -103,58 +187,26 @@ export const generateDiagnosis = onCall(
     });
 
     try {
-    // --- Datos del mes y del mes anterior ---
-    const { startMs, endMs } = monthRange(month);
-    const prev = monthRange(previousMonthId(month));
-    const txQuery = (from: number, to: number) =>
-      db
-        .collection(`businesses/${businessId}/transactions`)
-        .where("date", ">=", Timestamp.fromMillis(from))
-        .where("date", "<", Timestamp.fromMillis(to))
-        .limit(MAX_TX_PER_MONTH)
-        .get();
-
-    const [txSnap, prevSnap, recSnap] = await Promise.all([
-      txQuery(startMs, endMs),
-      txQuery(prev.startMs, prev.endMs),
-      db
-        .collection(`businesses/${businessId}/receivables`)
-        .where("status", "in", ["pendiente", "vencido"])
-        .limit(1000)
-        .get(),
+    // --- Datos del mes y del mes anterior: salen de los resúmenes, no de las transacciones ---
+    const [cur, prevMonth, recs] = await Promise.all([
+      loadMonth(businessId, month),
+      loadMonth(businessId, previousMonthId(month)),
+      loadPendingReceivables(businessId),
     ]);
 
-    if (txSnap.size >= MAX_TX_PER_MONTH || prevSnap.size >= MAX_TX_PER_MONTH) {
-      throw new HttpsError(
-        "failed-precondition",
-        "Este mes tiene demasiados movimientos para analizarlos completos. Escríbenos para ayudarte."
-      );
-    }
-    if (txSnap.empty) {
+    if (cur.summary.count <= 0) {
       throw new HttpsError(
         "failed-precondition",
         "No hay movimientos registrados en ese mes para analizar."
       );
     }
 
-    const toTx = (d: admin.firestore.QueryDocumentSnapshot): TxInput => ({
-      type: d.get("type") === "ingreso" ? "ingreso" : "egreso",
-      amount: Number(d.get("amount")) || 0,
-      category: String(d.get("category") || "Otros"),
-      method: String(d.get("method") || "efectivo"),
-      dateMs: tsMs(d.get("date")),
-    });
-    const receivables: ReceivableInput[] = recSnap.docs.map((d) => ({
-      amount: Number(d.get("amount")) || 0,
-      status: String(d.get("status")),
-      dueDateMs: d.get("dueDate") ? tsMs(d.get("dueDate")) : null,
-    }));
-
-    const stats = computeStats({
+    const stats = statsFromSummaries({
       month,
-      transactions: txSnap.docs.map(toTx),
-      previousTransactions: prevSnap.docs.map(toTx),
-      receivables,
+      summary: cur.summary,
+      previous: prevMonth.summary,
+      days: cur.days,
+      receivables: recs,
       nowMs,
     });
 

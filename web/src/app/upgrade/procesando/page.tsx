@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuthUser } from "@/lib/auth";
-import { useUserProfile } from "@/lib/userProfile";
+import { getCheckoutStatus } from "@/lib/payments";
 import { AppHeader } from "@/components/AppHeader";
 
 type Outcome = "waiting" | "success" | "failed";
@@ -12,34 +12,45 @@ type Outcome = "waiting" | "success" | "failed";
 export default function ProcessingPaymentPage() {
   const router = useRouter();
   const { user } = useAuthUser();
-  const { profile } = useUserProfile(user?.uid);
   const [waitedTooLong, setWaitedTooLong] = useState(false);
   const [txStatus, setTxStatus] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<Outcome>("waiting");
-  // Vencimiento que tenía el plan al abrir esta página: el pago se confirma
-  // cuando el webhook lo cambia (sirve también al pasar de Pro a Premium).
-  const baseline = useRef<number | null | undefined>(undefined);
 
   useEffect(() => {
-    // Bold agrega el estado del pago a la URL de redirección.
-    const status = new URLSearchParams(window.location.search).get("bold-tx-status");
+    // Bold agrega el estado del pago a la URL; el orderId lo pone PINAK (?order=).
+    const q = new URLSearchParams(window.location.search);
+    const status = q.get("bold-tx-status");
     setTxStatus(status);
+    setOrderId(q.get("order") ?? q.get("bold-order-id"));
     if (status === "rejected" || status === "failed") setOutcome("failed");
   }, []);
 
+  // Se consulta el estado real del pago en el servidor hasta que quede "completed".
   useEffect(() => {
-    if (!profile || outcome === "failed") return;
-    const expires = profile.planExpiresAt ? profile.planExpiresAt.getTime() : null;
-    if (baseline.current === undefined) {
-      baseline.current = expires;
-      return;
+    if (!user || !orderId || outcome !== "waiting") return;
+    let stop = false;
+    async function check() {
+      try {
+        const status = await getCheckoutStatus(orderId!);
+        if (!stop && status === "completed") setOutcome("success");
+      } catch {
+        /* se reintenta en el siguiente ciclo */
+      }
     }
-    if (!profile.planTrial && profile.plan !== "emprendedor" && expires !== baseline.current) {
-      setOutcome("success");
-      const t = setTimeout(() => router.replace("/dashboard"), 1500);
-      return () => clearTimeout(t);
-    }
-  }, [profile, outcome, router]);
+    check();
+    const timer = setInterval(check, 2500);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
+  }, [user, orderId, outcome]);
+
+  useEffect(() => {
+    if (outcome !== "success") return;
+    const t = setTimeout(() => router.replace("/dashboard"), 1500);
+    return () => clearTimeout(t);
+  }, [outcome, router]);
 
   useEffect(() => {
     const t = setTimeout(() => setWaitedTooLong(true), 15000);

@@ -189,3 +189,14 @@ export interface Diagnosis {
   generationCount: number;
   generatedAt: Date | null;
 }
+
+/** Resumen agregado de un día, un mes o todo el historial (lo mantiene el servidor). */
+export interface Summary {
+  income: number;
+  expense: number;
+  count: number;
+  aiCount: number;
+  expenseByCategory: Record<string, number>;
+  incomeByCategory: Record<string, number>;
+  incomeByMethod: Record<string, number>;
+}

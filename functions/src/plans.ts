@@ -24,6 +24,9 @@ export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   premium: { users: null, businesses: null, ai: true, exports: true, diagnosis: true },
 };
 
+/** Tope diario de registros con IA por negocio (protege el costo de Gemini). */
+export const AI_DAILY_CAP: Record<Plan, number> = { emprendedor: 0, pro: 200, premium: 500 };
+
 export const PLAN_NAMES: Record<Plan, string> = {
   emprendedor: "Emprendedor",
   pro: "Pro",
@@ -259,4 +262,80 @@ export function trialDecision(input: {
     return { code: "failed-precondition", message: "Ya estás probando un plan superior." };
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Pagos: qué pasa con el plan del usuario cuando Bold aprueba una venta
+// ---------------------------------------------------------------------------
+export const PLAN_RANK: Record<Plan, number> = { emprendedor: 0, pro: 1, premium: 2 };
+export const PAID_PLAN_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface PendingPlan {
+  plan: "pro" | "premium";
+  /** Cuándo empieza a regir (el vencimiento del plan superior vigente). */
+  startMs: number;
+  days: number;
+}
+
+export interface PaymentState {
+  plan: Plan;
+  trial: boolean;
+  expiresMs: number | null;
+  pending: PendingPlan | null;
+}
+
+export interface PaymentResult {
+  plan: Plan;
+  expiresMs: number | null;
+  pending: PendingPlan | null;
+  /** true si se aplicó ahora; false si quedó como crédito pendiente. */
+  appliedNow: boolean;
+}
+
+/** Plan de pago vigente (no prueba, no vencido), o null. */
+function activePaid(s: PaymentState, nowMs: number): { plan: "pro" | "premium"; expiresMs: number } | null {
+  if (s.plan === "emprendedor" || s.trial) return null;
+  if (s.expiresMs === null || s.expiresMs <= nowMs) return null;
+  return { plan: s.plan, expiresMs: s.expiresMs };
+}
+
+export function paymentDecision(input: {
+  nowMs: number;
+  state: PaymentState;
+  paid: "pro" | "premium";
+  days?: number;
+}): PaymentResult {
+  const days = input.days ?? PAID_PLAN_DAYS;
+  const { nowMs, state, paid } = input;
+  const active = activePaid(state, nowMs);
+
+  if (active && PLAN_RANK[active.plan] > PLAN_RANK[paid]) {
+    // Pagó un plan inferior al que ya tiene vigente: no se baja; queda como crédito.
+    const sameCredit = state.pending && state.pending.plan === paid;
+    return {
+      plan: state.plan,
+      expiresMs: state.expiresMs,
+      pending: { plan: paid, startMs: active.expiresMs, days: (sameCredit ? state.pending!.days : 0) + days },
+      appliedNow: false,
+    };
+  }
+  if (active && active.plan === paid) {
+    // Renovación anticipada: suma desde el vencimiento actual.
+    return { plan: paid, expiresMs: active.expiresMs + days * DAY_MS, pending: state.pending, appliedNow: true };
+  }
+  // Sin plan de pago vigente, en prueba, o plan superior: empieza desde ahora.
+  return { plan: paid, expiresMs: nowMs + days * DAY_MS, pending: null, appliedNow: true };
+}
+
+/**
+ * Al vencer el plan: si hay un crédito pendiente se activa; si no, vuelve a gratis.
+ */
+export function expiryDecision(input: {
+  nowMs: number;
+  pending: PendingPlan | null;
+}): { plan: Plan; expiresMs: number | null; pending: null } {
+  if (!input.pending) return { plan: "emprendedor", expiresMs: null, pending: null };
+  const start = Math.max(input.pending.startMs, input.nowMs);
+  return { plan: input.pending.plan, expiresMs: start + input.pending.days * DAY_MS, pending: null };
 }

@@ -62,27 +62,31 @@ function agruparParaGrafica(transactions: Transaction[], range: Range) {
     .slice(-10); // máximo 10 barras para que se vea bien en móvil
 }
 
+const ALL_LIMIT = 1000;
+
+/** Inicio del periodo (null = sin límite inferior). */
+function rangeStart(range: Range): Date | null {
+  if (range === "all") return null;
+  const now = new Date();
+  if (range === "month") return new Date(now.getFullYear(), now.getMonth(), 1);
+  const start = new Date(now);
+  start.setDate(now.getDate() - (range === "7d" ? 7 : 30));
+  return start;
+}
+
 export default function ReportsPage() {
   const { business } = useBusiness();
   const { money } = usePrivacy();
-  const { transactions, loading } = useTransactions(business?.id);
   const [range, setRange] = useState<Range>("30d");
+  // Solo se escuchan los movimientos del periodo elegido ("Todo" trae los últimos 1000).
+  const since = useMemo(() => rangeStart(range), [range]);
+  const { transactions, loading, error, retry } = useTransactions(business?.id, {
+    since: since ?? undefined,
+    limit: range === "all" ? ALL_LIMIT : undefined,
+  });
+  const truncated = range === "all" && transactions.length >= ALL_LIMIT;
 
-  const filtered = useMemo(() => {
-    if (range === "all") return transactions;
-    const now = new Date();
-    let start: Date;
-    if (range === "7d") {
-      start = new Date(now);
-      start.setDate(now.getDate() - 7);
-    } else if (range === "30d") {
-      start = new Date(now);
-      start.setDate(now.getDate() - 30);
-    } else {
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-    }
-    return transactions.filter((t) => t.date >= start);
-  }, [transactions, range]);
+  const filtered = transactions;
 
   const gate = useBusinessGate();
   if (gate) return gate;
@@ -159,10 +163,26 @@ export default function ReportsPage() {
           </h2>
 
           <div className="mt-3 divide-y divide-line rounded-2xl border border-line bg-white">
+            {error && (
+              <div className="px-4 py-6 text-center">
+                <p className="text-sm text-danger">{error}</p>
+                <button
+                  onClick={retry}
+                  className="mt-3 rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-navy-800"
+                >
+                  Reintentar
+                </button>
+              </div>
+            )}
+            {truncated && (
+              <p className="px-4 py-2 text-center text-xs text-ink-soft">
+                Mostrando los últimos {ALL_LIMIT} movimientos. Elige un periodo más corto para ver un mes completo.
+              </p>
+            )}
             {loading && (
               <p className="px-4 py-6 text-center text-sm text-ink-soft">Cargando...</p>
             )}
-            {!loading && filtered.length === 0 && (
+            {!loading && !error && filtered.length === 0 && (
               <p className="px-4 py-6 text-center text-sm text-ink-soft">
                 No hay movimientos en este periodo.
               </p>

@@ -3,11 +3,10 @@ import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 import { GoogleGenAI } from "@google/genai";
 import { geminiApiKey, MODEL } from "./gemini";
-import { normalizePlan, PLAN_LIMITS } from "./plans";
+import { AI_DAILY_CAP, normalizePlan, PLAN_LIMITS } from "./plans";
+import { ENFORCE_APP_CHECK } from "./options";
 import { monthIdOf, dayIdOf } from "./diagnosisStats";
 
-// Tope diario de registros con IA por negocio (protege la cuota de Gemini).
-const AI_DAILY_CAP = 300;
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -54,8 +53,7 @@ Reglas:
 - Nunca inventes montos ni categorías que no estén implícitas en el mensaje.
 - No agregues explicaciones, comentarios ni markdown. Solo el array JSON.`;
 
-export const parseTransactionText = onCall(
-  { secrets: [geminiApiKey], region: "us-central1" },
+export const parseTransactionText = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, secrets: [geminiApiKey], region: "us-central1" },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Debes iniciar sesión para usar esta función.");
@@ -96,28 +94,18 @@ export const parseTransactionText = onCall(
       );
     }
 
-    // Contador de uso, atómico: suma el mes y aplica el tope diario por negocio.
+    // Tope diario por negocio y plan (se revisa antes; el contador sube solo si Gemini responde bien).
     const usageRef = bizRef.collection("usage").doc(currentMonthId());
     const dayRef = bizRef.collection("usage").doc(`day-${dayIdOf(Date.now())}`);
-    const used = await db.runTransaction(async (tx) => {
-      const [usageSnap, daySnap] = await Promise.all([tx.get(usageRef), tx.get(dayRef)]);
-      const today = ((daySnap.data()?.aiRegistrationsUsed as number) ?? 0) + 1;
-      if (today > AI_DAILY_CAP) {
-        throw new HttpsError(
-          "resource-exhausted",
-          "Llegaste al límite diario de registros con IA. Intenta de nuevo mañana."
-        );
-      }
-      const monthly = ((usageSnap.data()?.aiRegistrationsUsed as number) ?? 0) + 1;
-      tx.set(
-        usageRef,
-        { aiRegistrationsUsed: monthly, aiRegistrationsLimit: null, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
-        { merge: true }
+    const cap = AI_DAILY_CAP[normalizePlan(biz.plan)];
+    const daySnap = await dayRef.get();
+    if (((daySnap.data()?.aiRegistrationsUsed as number) ?? 0) >= cap) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Llegaste al límite diario de registros con IA de tu plan. Puedes seguir registrando a mano y la IA vuelve mañana."
       );
-      tx.set(dayRef, { aiRegistrationsUsed: today, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-      return monthly;
-    });
-    const usageAfter = { used, limit: null as number | null };
+    }
+
 
     const ai = new GoogleGenAI({ apiKey: geminiApiKey.value() });
 
@@ -189,6 +177,16 @@ export const parseTransactionText = onCall(
       }
     }
 
+    // Solo ahora que Gemini respondió bien se cuenta el uso (incremento atómico).
+    const inc = admin.firestore.FieldValue.increment(1);
+    const stamp = admin.firestore.FieldValue.serverTimestamp();
+    await Promise.all([
+      usageRef.set({ aiRegistrationsUsed: inc, aiRegistrationsLimit: null, updatedAt: stamp }, { merge: true }),
+      dayRef.set({ aiRegistrationsUsed: inc, updatedAt: stamp }, { merge: true }),
+    ]);
+    const used = (((await usageRef.get()).data()?.aiRegistrationsUsed as number) ?? 1);
+    const usageAfter = { used, limit: null as number | null };
+
     logger.info("Transacciones detectadas por IA", { uid, count: transactions.length });
 
     return {
@@ -199,7 +197,8 @@ export const parseTransactionText = onCall(
   }
 );
 
-export { createBoldCheckout, boldWebhook, downgradeExpiredPlans } from "./payments";
+export { onTransactionWritten } from "./summaries";
+export { createBoldCheckout, boldWebhook, downgradeExpiredPlans, getCheckoutStatus } from "./payments";
 export {
   ensureBusiness,
   createBusiness,

@@ -13,6 +13,7 @@ import {
   type Plan,
   type Refusal,
 } from "./plans";
+import { ENFORCE_APP_CHECK } from "./options";
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -154,6 +155,11 @@ async function createBusinessCore(
   email: string,
   input: { name: string; businessType: string; phone: string; city: string }
 ) {
+  // Si aún no tiene su negocio principal (businesses/{uid}), se crea primero para que cuente en el límite.
+  if (!(await db.doc(`businesses/${uid}`).get()).exists) {
+    await ensureBusinessCore(uid, email, "");
+  }
+
   const ref = db.collection("businesses").doc();
   const now = Timestamp.now();
   // Todo en una transacción: dos solicitudes simultáneas no pueden pasar el límite del plan.
@@ -386,12 +392,12 @@ export async function syncBusinessPlans(
 // ---------------------------------------------------------------------------
 // Funciones expuestas a la app
 // ---------------------------------------------------------------------------
-export const ensureBusiness = onCall({ region: REGION }, async (request) => {
+export const ensureBusiness = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, region: REGION }, async (request) => {
   const { uid, email } = requireAuth(request);
   return ensureBusinessCore(uid, email, str(request.data?.businessName, 80));
 });
 
-export const createBusiness = onCall({ region: REGION }, async (request) => {
+export const createBusiness = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, region: REGION }, async (request) => {
   const { uid, email } = requireAuth(request);
   const d = request.data ?? {};
   const businessId = await createBusinessCore(uid, email, {
@@ -403,7 +409,7 @@ export const createBusiness = onCall({ region: REGION }, async (request) => {
   return { businessId };
 });
 
-export const inviteMember = onCall({ region: REGION }, async (request) => {
+export const inviteMember = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, region: REGION }, async (request) => {
   const { uid } = requireAuth(request);
   const businessId = str(request.data?.businessId, 128);
   if (!businessId) throw new HttpsError("invalid-argument", "Falta el negocio.");
@@ -411,7 +417,7 @@ export const inviteMember = onCall({ region: REGION }, async (request) => {
   return { inviteId };
 });
 
-export const acceptInvite = onCall({ region: REGION }, async (request) => {
+export const acceptInvite = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, region: REGION }, async (request) => {
   const { uid, email, emailVerified } = requireAuth(request);
   const inviteId = str(request.data?.inviteId, 128);
   if (!inviteId) throw new HttpsError("invalid-argument", "Falta la invitación.");
@@ -419,7 +425,7 @@ export const acceptInvite = onCall({ region: REGION }, async (request) => {
   return { businessId };
 });
 
-export const declineInvite = onCall({ region: REGION }, async (request) => {
+export const declineInvite = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, region: REGION }, async (request) => {
   const { email, emailVerified } = requireAuth(request);
   const inviteId = str(request.data?.inviteId, 128);
   if (!inviteId) throw new HttpsError("invalid-argument", "Falta la invitación.");
@@ -427,7 +433,7 @@ export const declineInvite = onCall({ region: REGION }, async (request) => {
   return { ok: true };
 });
 
-export const cancelInvite = onCall({ region: REGION }, async (request) => {
+export const cancelInvite = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, region: REGION }, async (request) => {
   const { uid } = requireAuth(request);
   const inviteId = str(request.data?.inviteId, 128);
   if (!inviteId) throw new HttpsError("invalid-argument", "Falta la invitación.");
@@ -435,7 +441,7 @@ export const cancelInvite = onCall({ region: REGION }, async (request) => {
   return { ok: true };
 });
 
-export const removeMember = onCall({ region: REGION }, async (request) => {
+export const removeMember = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, region: REGION }, async (request) => {
   const { uid } = requireAuth(request);
   const businessId = str(request.data?.businessId, 128);
   const memberUid = str(request.data?.memberUid, 128);

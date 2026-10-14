@@ -26,29 +26,33 @@ const RANGE_LABELS: Record<Range, string> = {
   all: "Todo",
 };
 
+const ALL_LIMIT = 1000;
+
+/** Inicio del periodo (null = sin límite inferior). */
+function rangeStart(range: Range): Date | null {
+  if (range === "all") return null;
+  const now = new Date();
+  if (range === "month") return new Date(now.getFullYear(), now.getMonth(), 1);
+  const start = new Date(now);
+  start.setDate(now.getDate() - (range === "7d" ? 7 : 30));
+  return start;
+}
+
 export default function ReportsScreen({ onBack }: { onBack: () => void }) {
   const { business } = useBusiness();
   const { money } = usePrivacy();
   const nav = useNav();
-  const { transactions, loading } = useTransactions(business?.id);
   const [range, setRange] = useState<Range>("30d");
+  // Solo se escuchan los movimientos del periodo elegido ("Todo" trae los últimos 1000).
+  const since = useMemo(() => rangeStart(range), [range]);
+  const { transactions, loading, error, retry } = useTransactions(business?.id, {
+    since: since ?? undefined,
+    limit: range === "all" ? ALL_LIMIT : undefined,
+  });
+  const truncated = range === "all" && transactions.length >= ALL_LIMIT;
   const [exporting, setExporting] = useState(false);
 
-  const filtered = useMemo(() => {
-    if (range === "all") return transactions;
-    const now = new Date();
-    let start: Date;
-    if (range === "7d") {
-      start = new Date(now);
-      start.setDate(now.getDate() - 7);
-    } else if (range === "30d") {
-      start = new Date(now);
-      start.setDate(now.getDate() - 30);
-    } else {
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-    }
-    return transactions.filter((t) => t.date >= start);
-  }, [transactions, range]);
+  const filtered = transactions;
 
   const gate = useBusinessGate();
   if (gate) return gate;
@@ -132,8 +136,21 @@ export default function ReportsScreen({ onBack }: { onBack: () => void }) {
 
             <Text style={styles.sectionTitle}>Movimientos del periodo ({filtered.length})</Text>
 
+            {error && (
+              <View style={{ alignItems: "center", paddingVertical: 12 }}>
+                <Text style={[styles.emptyText, { color: colors.danger }]}>{error}</Text>
+                <TouchableOpacity style={styles.exportButton} onPress={retry}>
+                  <Text style={styles.exportButtonText}>Reintentar</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {truncated && (
+              <Text style={styles.emptyText}>
+                Mostrando los últimos {ALL_LIMIT} movimientos. Elige un periodo más corto para ver un mes completo.
+              </Text>
+            )}
             {loading && <Text style={styles.emptyText}>Cargando...</Text>}
-            {!loading && filtered.length === 0 && (
+            {!loading && !error && filtered.length === 0 && (
               <Text style={styles.emptyText}>No hay movimientos en este periodo.</Text>
             )}
           </>

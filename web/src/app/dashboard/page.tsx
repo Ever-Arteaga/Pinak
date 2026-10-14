@@ -10,36 +10,31 @@ import { useBusinessGate } from "@/components/BusinessGate";
 import { InvitationsBanner } from "@/components/InvitationsBanner";
 import { usePrivacy } from "@/lib/privacy";
 import { EyeIcon, EyeOffIcon } from "@/components/PrivacyIcons";
-import { computeBalance, useTransactions } from "@/lib/transactions";
+import { useTransactions } from "@/lib/transactions";
+import { dayId, useAllTimeSummary, useSummaries } from "@/lib/summaries";
 import { AddTransactionModal } from "@/components/AddTransactionModal";
 import { AiQuickAddModal } from "@/components/AiQuickAddModal";
 import { AppHeader } from "@/components/AppHeader";
 import { BarChart } from "@/components/BarChart";
-import { localDateKey } from "@/lib/dates";
-import { PLAN_LIMITS, type Transaction } from "@/types/pinak";
+import { PLAN_LIMITS, type Summary, type Transaction } from "@/types/pinak";
 
-function agruparUltimos7Dias(transactions: Transaction[]) {
+/** Últimos 7 días (de más antiguo a hoy) con sus fechas, para pedir los resúmenes diarios. */
+function ultimos7Dias() {
   const hoy = new Date();
-  const dias = Array.from({ length: 7 }, (_, i) => {
+  return Array.from({ length: 7 }, (_, i) => {
     const fecha = new Date(hoy);
     fecha.setDate(hoy.getDate() - (6 - i));
-    return {
-      clave: localDateKey(fecha),
-      label: fecha.toLocaleDateString("es-CO", { weekday: "short" }),
-      ingreso: 0,
-      egreso: 0,
-    };
+    return { id: dayId(fecha), label: fecha.toLocaleDateString("es-CO", { weekday: "short" }) };
   });
+}
 
-  transactions.forEach((t) => {
-    const clave = localDateKey(t.date);
-    const dia = dias.find((d) => d.clave === clave);
-    if (!dia) return;
-    if (t.type === "ingreso") dia.ingreso += t.amount;
-    else dia.egreso += t.amount;
-  });
-
-  return dias;
+function agruparUltimos7Dias(dias: { id: string; label: string }[], resumenes: Record<string, Summary>) {
+  return dias.map((d) => ({
+    clave: d.id,
+    label: d.label,
+    ingreso: resumenes[d.id]?.income ?? 0,
+    egreso: resumenes[d.id]?.expense ?? 0,
+  }));
 }
 
 export default function DashboardPage() {
@@ -48,7 +43,11 @@ export default function DashboardPage() {
   const { business } = useBusiness();
   const { money, available: privacyAvailable, enabled: privacyEnabled, toggle: togglePrivacy } =
     usePrivacy();
-  const { transactions, loading: txLoading } = useTransactions(business?.id);
+  // Los totales y la gráfica salen de resúmenes; solo se escuchan los 20 movimientos más recientes.
+  const { transactions, loading: txLoading, error: txError, retry: retryTx } = useTransactions(business?.id, { limit: 20 });
+  const { summary: totales, error: totalesError, retry: retryTotales } = useAllTimeSummary(business?.id);
+  const dias7 = ultimos7Dias();
+  const { items: resumenesDia } = useSummaries(business?.id, dias7[0].id, dias7[6].id);
   const [showModal, setShowModal] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -63,9 +62,11 @@ export default function DashboardPage() {
   if (gate) return gate;
   const biz = business!;
 
-  const { balance, totalIngresos, totalEgresos } = computeBalance(transactions);
+  const totalIngresos = totales.income;
+  const totalEgresos = totales.expense;
+  const balance = totalIngresos - totalEgresos;
   const recientes = transactions.slice(0, 8);
-  const datosGrafica = agruparUltimos7Dias(transactions);
+  const datosGrafica = agruparUltimos7Dias(dias7, resumenesDia);
 
   return (
     <main className="min-h-screen bg-cream pb-24">
@@ -176,13 +177,28 @@ export default function DashboardPage() {
           </h2>
 
           <div className="mt-3 divide-y divide-line rounded-2xl border border-line bg-white">
+            {(txError || totalesError) && (
+              <div className="px-4 py-6 text-center">
+                <p className="text-sm text-danger">{txError ?? totalesError}</p>
+                <button
+                  onClick={() => {
+                    retryTx();
+                    retryTotales();
+                  }}
+                  className="mt-3 rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-navy-800"
+                >
+                  Reintentar
+                </button>
+              </div>
+            )}
+
             {txLoading && (
               <p className="px-4 py-6 text-center text-sm text-ink-soft">
                 Cargando movimientos...
               </p>
             )}
 
-            {!txLoading && recientes.length === 0 && (
+            {!txLoading && !txError && recientes.length === 0 && (
               <div className="px-4 py-8 text-center">
                 <p className="text-sm font-medium text-ink">Aún no tienes registros</p>
                 <p className="mt-1 text-sm text-ink-soft">

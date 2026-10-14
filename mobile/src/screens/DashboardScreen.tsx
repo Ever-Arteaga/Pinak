@@ -5,7 +5,8 @@ import { useBusiness } from "../lib/business";
 import { usePrivacy } from "../lib/privacy";
 import { useBusinessGate } from "../components/BusinessGate";
 import { InvitationsBanner } from "../components/InvitationsBanner";
-import { computeBalance, useTransactions } from "../lib/transactions";
+import { useTransactions } from "../lib/transactions";
+import { useAllTimeSummary } from "../lib/summaries";
 import { AddTransactionModal } from "../components/AddTransactionModal";
 import { AiQuickAddModal } from "../components/AiQuickAddModal";
 import { AppHeader } from "../components/AppHeader";
@@ -29,7 +30,9 @@ export default function DashboardScreen({
 }) {
   const { business } = useBusiness();
   const { money } = usePrivacy();
-  const { transactions, loading } = useTransactions(business?.id);
+  // Los totales salen de un resumen; solo se escuchan los 20 movimientos más recientes.
+  const { transactions, loading, error: txError, retry: retryTx } = useTransactions(business?.id, { limit: 20 });
+  const { summary: totales, error: totalesError, retry: retryTotales } = useAllTimeSummary(business?.id);
   const [showModal, setShowModal] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -38,7 +41,9 @@ export default function DashboardScreen({
   if (gate) return gate;
   const biz = business!;
 
-  const { balance, totalIngresos, totalEgresos } = computeBalance(transactions);
+  const totalIngresos = totales.income;
+  const totalEgresos = totales.expense;
+  const balance = totalIngresos - totalEgresos;
   const recientes = transactions.slice(0, 8);
 
   return (
@@ -106,8 +111,22 @@ export default function DashboardScreen({
 
             <Text style={styles.sectionTitle}>Movimientos recientes</Text>
 
+            {(txError || totalesError) && (
+              <View style={{ alignItems: "center", paddingVertical: 16 }}>
+                <Text style={[styles.emptyText, { color: colors.danger }]}>{txError ?? totalesError}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    retryTx();
+                    retryTotales();
+                  }}
+                  style={styles.secondaryAction}
+                >
+                  <Text style={styles.secondaryActionText}>Reintentar</Text>
+                </TouchableOpacity>
+              </View>
+            )}
             {loading && <Text style={styles.emptyText}>Cargando movimientos...</Text>}
-            {!loading && recientes.length === 0 && (
+            {!loading && !txError && recientes.length === 0 && (
               <Text style={styles.emptyText}>
                 Aún no tienes registros. Agrega tu primer ingreso o egreso.
               </Text>
