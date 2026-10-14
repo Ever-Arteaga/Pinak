@@ -10,7 +10,9 @@
         "firebase-debug.*.log",
         "*.local"
       ],
-      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
     }
   ],
   "firestore": {
@@ -18,17 +20,35 @@
   },
   "hosting": {
     "public": "web/out",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "headers": [
       {
-        "source": "/sw.js",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
-      },
-      {
-        "source": "/manifest.webmanifest",
+        "source": "**",
         "headers": [
-          { "key": "Content-Type", "value": "application/manifest+json" },
-          { "key": "Cache-Control", "value": "public, max-age=3600" }
+          {
+            "key": "Strict-Transport-Security",
+            "value": "max-age=31536000; includeSubDomains"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Content-Security-Policy",
+            "value": "frame-ancestors 'none'"
+          },
+          {
+            "key": "Permissions-Policy",
+            "value": "camera=(), geolocation=(), payment=(self)"
+          }
         ]
       }
     ]

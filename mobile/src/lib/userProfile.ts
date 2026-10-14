@@ -44,7 +44,7 @@ export function useUserProfile(userId: string | undefined) {
           : null
       );
       setLoading(false);
-    });
+    }, () => setLoading(false));
 
     return unsubscribe;
   }, [userId]);

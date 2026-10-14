@@ -4,6 +4,10 @@ import * as admin from "firebase-admin";
 import { GoogleGenAI } from "@google/genai";
 import { geminiApiKey, MODEL } from "./gemini";
 import { normalizePlan, PLAN_LIMITS } from "./plans";
+import { monthIdOf, dayIdOf } from "./diagnosisStats";
+
+// Tope diario de registros con IA por negocio (protege la cuota de Gemini).
+const AI_DAILY_CAP = 300;
 
 if (admin.apps.length === 0) {
   admin.initializeApp();
@@ -23,8 +27,7 @@ interface ParsedTransaction {
 }
 
 function currentMonthId(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return monthIdOf(Date.now());
 }
 
 const SYSTEM_PROMPT = `Eres el motor de registro contable de PINAK, una app financiera para pequeños negocios en Colombia.
@@ -93,18 +96,27 @@ export const parseTransactionText = onCall(
       );
     }
 
-    // Contador de uso (informativo: Pro y Premium son ilimitados).
+    // Contador de uso, atómico: suma el mes y aplica el tope diario por negocio.
     const usageRef = bizRef.collection("usage").doc(currentMonthId());
-    const usageSnap = await usageRef.get();
-    const used = ((usageSnap.data()?.aiRegistrationsUsed as number) ?? 0) + 1;
-    await usageRef.set(
-      {
-        aiRegistrationsUsed: used,
-        aiRegistrationsLimit: null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+    const dayRef = bizRef.collection("usage").doc(`day-${dayIdOf(Date.now())}`);
+    const used = await db.runTransaction(async (tx) => {
+      const [usageSnap, daySnap] = await Promise.all([tx.get(usageRef), tx.get(dayRef)]);
+      const today = ((daySnap.data()?.aiRegistrationsUsed as number) ?? 0) + 1;
+      if (today > AI_DAILY_CAP) {
+        throw new HttpsError(
+          "resource-exhausted",
+          "Llegaste al límite diario de registros con IA. Intenta de nuevo mañana."
+        );
+      }
+      const monthly = ((usageSnap.data()?.aiRegistrationsUsed as number) ?? 0) + 1;
+      tx.set(
+        usageRef,
+        { aiRegistrationsUsed: monthly, aiRegistrationsLimit: null, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+      tx.set(dayRef, { aiRegistrationsUsed: today, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      return monthly;
+    });
     const usageAfter = { used, limit: null as number | null };
 
     const ai = new GoogleGenAI({ apiKey: geminiApiKey.value() });

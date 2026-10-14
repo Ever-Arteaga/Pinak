@@ -35,7 +35,13 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
         && request.resource.data.keys().hasAll(['email', 'businessName', 'plan', 'createdAt'])
-        && request.resource.data.plan == 'emprendedor';
+        && request.resource.data.keys().hasOnly(['email', 'businessName', 'plan', 'planStartedAt', 'createdAt', 'privacyModeEnabled'])
+        && request.resource.data.email is string
+        && request.resource.data.businessName is string
+        && request.resource.data.businessName.size() <= 80
+        && request.resource.data.plan == 'emprendedor'
+        && request.resource.data.createdAt == request.time
+        && (!('privacyModeEnabled' in request.resource.data) || request.resource.data.privacyModeEnabled is bool);
       allow update: if isOwner(userId)
         && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['businessName', 'businessType', 'phone', 'city', 'nit', 'description', 'privacyModeEnabled']);
@@ -71,6 +77,10 @@ service cloud.firestore {
         allow read: if canAccess(businessId);
         allow create: if canAccess(businessId)
           && request.resource.data.keys().hasAll(['type', 'amount', 'category', 'method', 'date'])
+          && request.resource.data.keys().hasOnly(['type', 'amount', 'category', 'method', 'description', 'date', 'source', 'createdAt'])
+          && request.resource.data.date is timestamp
+          && (!('createdAt' in request.resource.data) || request.resource.data.createdAt == request.time)
+          && (!('source' in request.resource.data) || request.resource.data.source in ['manual', 'ia_voz', 'ia_texto'])
           && request.resource.data.type in ['ingreso', 'egreso']
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
@@ -82,6 +92,9 @@ service cloud.firestore {
           && (!('description' in request.resource.data) || request.resource.data.description == null
               || (request.resource.data.description is string && request.resource.data.description.size() <= 200));
         allow update: if canAccess(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['type', 'amount', 'category', 'method', 'description', 'date'])
+          && request.resource.data.date is timestamp
           && request.resource.data.type in ['ingreso', 'egreso']
           && request.resource.data.amount is number
           && request.resource.data.amount > 0
@@ -96,13 +109,29 @@ service cloud.firestore {
       }
 
       match /categories/{categoryId} {
-        allow read, create, update, delete: if canAccess(businessId);
+        allow read, delete: if canAccess(businessId);
+        allow create: if canAccess(businessId)
+          && request.resource.data.keys().hasOnly(['name', 'type', 'icon', 'isDefault', 'createdAt'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 60
+          && request.resource.data.type in ['ingreso', 'egreso']
+          && request.resource.data.createdAt == request.time;
+        allow update: if canAccess(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'icon'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 60;
       }
 
       match /receivables/{receivableId} {
         allow read: if canAccess(businessId);
         allow create: if canAccess(businessId)
           && request.resource.data.keys().hasAll(['clientName', 'amount', 'status'])
+          && request.resource.data.keys().hasOnly(['clientName', 'clientPhone', 'amount', 'status', 'dueDate', 'createdAt'])
+          && (!('clientPhone' in request.resource.data) || (request.resource.data.clientPhone is string && request.resource.data.clientPhone.size() <= 20))
+          && (!('dueDate' in request.resource.data) || request.resource.data.dueDate == null || request.resource.data.dueDate is timestamp)
+          && (!('createdAt' in request.resource.data) || request.resource.data.createdAt == request.time)
           && request.resource.data.clientName is string
           && request.resource.data.clientName.size() >= 2
           && request.resource.data.clientName.size() <= 80
@@ -111,6 +140,10 @@ service cloud.firestore {
           && request.resource.data.amount <= 1000000000
           && request.resource.data.status == 'pendiente';
         allow update: if canAccess(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['clientName', 'clientPhone', 'amount', 'status', 'dueDate'])
+          && (!('clientPhone' in request.resource.data) || (request.resource.data.clientPhone is string && request.resource.data.clientPhone.size() <= 20))
+          && (!('dueDate' in request.resource.data) || request.resource.data.dueDate == null || request.resource.data.dueDate is timestamp)
           && request.resource.data.status in ['pendiente', 'pagado', 'vencido']
           && request.resource.data.clientName is string
           && request.resource.data.clientName.size() >= 2

@@ -95,7 +95,7 @@ export function useTransactions(businessId: string | undefined) {
       });
       setTransactions(items);
       setLoading(false);
-    });
+    }, () => setLoading(false));
 
     return unsubscribe;
   }, [businessId]);

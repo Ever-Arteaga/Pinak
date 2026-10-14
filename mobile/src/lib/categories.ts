@@ -30,7 +30,7 @@ export function useCategories(businessId: string | undefined) {
       });
       setCategories(items);
       setLoading(false);
-    });
+    }, () => setLoading(false));
 
     return unsubscribe;
   }, [businessId]);

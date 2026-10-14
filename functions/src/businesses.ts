@@ -154,29 +154,32 @@ async function createBusinessCore(
   email: string,
   input: { name: string; businessType: string; phone: string; city: string }
 ) {
-  const userSnap = await db.doc(`users/${uid}`).get();
-  const plan = normalizePlan(userSnap.get("plan"));
-  const owned = await db.collection("businesses").where("ownerId", "==", uid).get();
-
-  const refusal = createBusinessDecision({ plan, ownedCount: owned.size, name: input.name });
-  if (refusal) refuse(refusal);
-
   const ref = db.collection("businesses").doc();
   const now = Timestamp.now();
-  await ref.create({
-    name: input.name.trim(),
-    businessType: input.businessType,
-    phone: input.phone,
-    city: input.city,
-    nit: "",
-    description: "",
-    ownerId: uid,
-    memberIds: [uid],
-    members: { [uid]: { role: "owner", email, joinedAt: now } },
-    plan,
-    locked: false,
-    setupDone: false,
-    createdAt: now,
+  // Todo en una transacción: dos solicitudes simultáneas no pueden pasar el límite del plan.
+  await db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(db.doc(`users/${uid}`));
+    const plan = normalizePlan(userSnap.get("plan"));
+    const owned = await tx.get(db.collection("businesses").where("ownerId", "==", uid));
+
+    const refusal = createBusinessDecision({ plan, ownedCount: owned.size, name: input.name });
+    if (refusal) refuse(refusal);
+
+    tx.create(ref, {
+      name: input.name.trim(),
+      businessType: input.businessType,
+      phone: input.phone,
+      city: input.city,
+      nit: "",
+      description: "",
+      ownerId: uid,
+      memberIds: [uid],
+      members: { [uid]: { role: "owner", email, joinedAt: now } },
+      plan,
+      locked: false,
+      setupDone: false,
+      createdAt: now,
+    });
   });
   await populateBusiness(ref.id, null);
   return ref.id;

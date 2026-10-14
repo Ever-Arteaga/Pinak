@@ -65,6 +65,12 @@ export function monthIdOf(ms: number): string {
   return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+/** "2026-10-13" correspondiente a un instante, en hora de Colombia. */
+export function dayIdOf(ms: number): string {
+  const shifted = new Date(ms - TZ_OFFSET_HOURS * 60 * 60 * 1000);
+  return shifted.toISOString().slice(0, 10);
+}
+
 export function previousMonthId(monthId: string): string {
   const [y, m] = monthId.split("-").map(Number);
   return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;

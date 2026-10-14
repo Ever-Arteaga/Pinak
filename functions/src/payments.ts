@@ -30,6 +30,31 @@ const PLAN_PRICES_COP: Record<PayablePlan, number> = {
 };
 
 const PLAN_DURATION_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const PLAN_RANK: Record<"emprendedor" | PayablePlan, number> = { emprendedor: 0, pro: 1, premium: 2 };
+
+// Solo se aceptan redirecciones a los dominios propios de PINAK.
+const ALLOWED_REDIRECT_HOSTS = ["pinak-nine.vercel.app", "pinak-dev.web.app", "pinak-dev.firebaseapp.com"];
+function isAllowedRedirect(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && ALLOWED_REDIRECT_HOSTS.includes(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Plan de pago vigente (no vencido) del usuario, o null si está en gratis o ya venció. */
+function activePaidPlan(
+  data: FirebaseFirestore.DocumentData | undefined
+): { plan: PayablePlan; trial: boolean; expiresMs: number } | null {
+  const plan = data?.plan;
+  if (plan !== "pro" && plan !== "premium") return null;
+  const expiresMs: number = data?.planExpiresAt?.toMillis?.() ?? 0;
+  if (expiresMs <= Date.now()) return null;
+  return { plan, trial: data?.planTrial === true, expiresMs };
+}
 
 /**
  * Genera los datos firmados que el cliente necesita para abrir el checkout
@@ -51,8 +76,17 @@ export const createBoldCheckout = onCall(
     if (plan !== "pro" && plan !== "premium") {
       throw new HttpsError("invalid-argument", "Plan inválido. Usa 'pro' o 'premium'.");
     }
-    if (!redirectionUrl.startsWith("https://")) {
-      throw new HttpsError("invalid-argument", "La URL de redirección debe empezar con https://.");
+    if (!isAllowedRedirect(redirectionUrl)) {
+      throw new HttpsError("invalid-argument", "La URL de redirección no está permitida.");
+    }
+
+    const userSnap = await db.doc(`users/${uid}`).get();
+    const active = activePaidPlan(userSnap.data());
+    if (active && !active.trial && PLAN_RANK[active.plan] > PLAN_RANK[plan]) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Ya tienes un plan superior activo. Podrás cambiar al terminar tu periodo."
+      );
     }
 
     const amount = PLAN_PRICES_COP[plan]; // pesos colombianos, sin decimales
@@ -157,62 +191,89 @@ export const boldWebhook = onRequest(
       return;
     }
 
-    const intent = intentSnap.data() as {
-      uid: string;
-      plan: PayablePlan;
-      amount: number;
-      status: string;
-    };
+    const paidAmount = body.data?.amount?.total;
+    const paidCurrency = body.data?.amount?.currency;
 
-    // Idempotencia: si ya procesamos este pago antes (reintento de Bold), no
-    // lo volvemos a aplicar, pero igual confirmamos recepción con 200.
-    if (intent.status === "completed") {
+    // Todo el cambio de plan ocurre en una transacción: un reintento de Bold
+    // (o dos notificaciones simultáneas) nunca aplica el mismo pago dos veces.
+    const outcome = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(intentRef);
+      const intent = snap.data() as { uid: string; plan: PayablePlan; amount: number; status: string };
+      if (intent.status === "completed") return { kind: "done" as const };
+      if (intent.status === "plan_applied") return { kind: "resume" as const, intent };
+
+      if (paidAmount !== intent.amount || (paidCurrency && paidCurrency !== "COP")) {
+        return { kind: "mismatch" as const, intent };
+      }
+
+      const userRef = db.doc(`users/${intent.uid}`);
+      const userSnap = await tx.get(userRef);
+      const active = activePaidPlan(userSnap.data());
+      const now = Date.now();
+
+      let plan: PayablePlan = intent.plan;
+      let baseMs = now;
+      if (active && !active.trial) {
+        if (PLAN_RANK[active.plan] > PLAN_RANK[intent.plan]) {
+          // Pagó un plan menor al que ya tiene: conserva el mayor, sin quitarle nada.
+          plan = active.plan;
+          baseMs = active.expiresMs;
+        } else if (active.plan === intent.plan) {
+          // Renovación anticipada: suma 30 días al vencimiento actual.
+          baseMs = active.expiresMs;
+        }
+      }
+      const planExpiresAt = admin.firestore.Timestamp.fromMillis(baseMs + PLAN_DURATION_DAYS * DAY_MS);
+
+      tx.set(
+        userRef,
+        { plan, planTrial: false, planExpiresAt, planUpdatedAt: admin.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+      tx.set(
+        db.doc(`users/${intent.uid}/payments/${body.data?.payment_id ?? reference}`),
+        { plan: intent.plan, amount: paidAmount, reference, createdAt: admin.firestore.FieldValue.serverTimestamp() }
+      );
+      tx.set(intentRef, { status: "plan_applied", appliedPlan: plan }, { merge: true });
+      return { kind: "applied" as const, intent: { ...intent, plan } };
+    });
+
+    if (outcome.kind === "done") {
       res.status(200).send("already processed");
       return;
     }
-
-    const paidAmount = body.data?.amount?.total;
-    if (paidAmount !== intent.amount) {
-      logger.error("El monto pagado no coincide con el esperado — posible manipulación", {
+    if (outcome.kind === "mismatch") {
+      logger.error("Monto o moneda del pago no coinciden — posible manipulación", {
         reference,
-        esperado: intent.amount,
+        esperado: outcome.intent.amount,
         recibido: paidAmount,
+        moneda: paidCurrency,
       });
       res.status(200).send("amount mismatch, not granting plan");
       return;
     }
 
-    const planExpiresAt = admin.firestore.Timestamp.fromMillis(
-      Date.now() + PLAN_DURATION_DAYS * 24 * 60 * 60 * 1000
-    );
+    const intent = outcome.intent;
+    const syncPlan: PayablePlan =
+      outcome.kind === "resume"
+        ? (((await intentRef.get()).get("appliedPlan") as PayablePlan | undefined) ?? intent.plan)
+        : intent.plan;
 
-    await db.doc(`users/${intent.uid}`).set(
-      { plan: intent.plan, planTrial: false, planExpiresAt, planUpdatedAt: admin.firestore.FieldValue.serverTimestamp() },
-      { merge: true }
-    );
-
-    // El plan del dueño se refleja en todos sus negocios (desbloquea y habilita
-    // a sus equipos). Si falla, se responde 500 para que Bold reintente.
+    // El plan del dueño se refleja en todos sus negocios. Si falla, se responde
+    // 500 y el reintento de Bold retoma desde aquí (el plan ya quedó aplicado).
     try {
-      await syncBusinessPlans(intent.uid, intent.plan);
+      await syncBusinessPlans(intent.uid, syncPlan);
     } catch (err) {
       logger.error("No se pudo sincronizar el plan con los negocios", { uid: intent.uid, err });
       res.status(500).send("business sync failed");
       return;
     }
 
-    await db.doc(`users/${intent.uid}/payments/${body.data?.payment_id ?? reference}`).set({
-      plan: intent.plan,
-      amount: paidAmount,
-      reference,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
     await intentRef.set({ status: "completed" }, { merge: true });
 
     logger.info("Plan actualizado tras pago aprobado con Bold", {
       uid: intent.uid,
-      plan: intent.plan,
+      plan: syncPlan,
       reference,
     });
 
@@ -229,34 +290,31 @@ export const boldWebhook = onRequest(
 export const downgradeExpiredPlans = onSchedule(
   { schedule: "every 24 hours", region: "us-central1" },
   async () => {
-    const now = admin.firestore.Timestamp.now();
-    const expired = await db
+    // Una sola condición de rango (sin índice compuesto); el plan se filtra aquí.
+    const snap = await db
       .collection("users")
-      .where("plan", "in", ["pro", "premium"])
-      .where("planExpiresAt", "<=", now)
+      .where("planExpiresAt", "<=", admin.firestore.Timestamp.now())
       .get();
+    const expired = snap.docs.filter((d) => d.get("plan") === "pro" || d.get("plan") === "premium");
 
-    if (expired.empty) {
+    if (expired.length === 0) {
       logger.info("Sin planes vencidos hoy");
       return;
     }
 
-    const batch = db.batch();
-    expired.docs.forEach((doc) => {
-      batch.update(doc.ref, { plan: "emprendedor", planTrial: false });
-    });
-    await batch.commit();
-
-    // Los negocios del usuario pierden los beneficios del plan vencido:
-    // se bloquean los que no caben y se recorta el equipo al límite del plan gratuito.
-    for (const doc of expired.docs) {
+    // Primero se ajustan los negocios y SOLO si sale bien se baja el plan del usuario:
+    // si algo falla, el usuario sigue vencido y se reintenta en la próxima corrida.
+    let done = 0;
+    for (const doc of expired) {
       try {
         await syncBusinessPlans(doc.id, "emprendedor", { cancelPendingInvites: true });
+        await doc.ref.update({ plan: "emprendedor", planTrial: false });
+        done++;
       } catch (err) {
-        logger.error("No se pudo ajustar los negocios tras el vencimiento", { uid: doc.id, err });
+        logger.error("No se pudo degradar al usuario vencido", { uid: doc.id, err });
       }
     }
 
-    logger.info(`Planes degradados a emprendedor por vencimiento: ${expired.size}`);
+    logger.info(`Planes degradados a emprendedor por vencimiento: ${done}/${expired.length}`);
   }
 );

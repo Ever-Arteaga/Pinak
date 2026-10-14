@@ -23,6 +23,7 @@ const db = admin.firestore();
 const Timestamp = admin.firestore.Timestamp;
 
 /** Tope de generaciones por negocio y mes: controla el costo de la IA. */
+const MAX_TX_PER_MONTH = 20000;
 const MAX_GENERATIONS_PER_MONTH = 3;
 
 const SYSTEM_PROMPT = `Eres el analista financiero de PINAK, una app para pequeños negocios en Colombia. Recibes las cifras YA CALCULADAS de un mes de un negocio y escribes un diagnóstico claro para su dueño, que no es experto en finanzas.
@@ -82,14 +83,26 @@ export const generateDiagnosis = onCall(
     }
 
     const diagRef = bizRef.collection("diagnostics").doc(month);
-    const prevCount = Number((await diagRef.get()).get("generationCount") ?? 0);
-    if (prevCount >= MAX_GENERATIONS_PER_MONTH) {
-      throw new HttpsError(
-        "resource-exhausted",
-        `Ya generaste el diagnóstico de este mes ${MAX_GENERATIONS_PER_MONTH} veces. Usa el que ya tienes.`
-      );
-    }
+    const lockRef = bizRef.collection("usage").doc(`diag-lock-${month}`);
 
+    // Candado atómico: dos solicitudes a la vez no pueden pasar el tope de generaciones.
+    const prevCount = await db.runTransaction(async (tx) => {
+      const [diagSnap, lockSnap] = await Promise.all([tx.get(diagRef), tx.get(lockRef)]);
+      const count = Number(diagSnap.get("generationCount") ?? 0);
+      if (count >= MAX_GENERATIONS_PER_MONTH) {
+        throw new HttpsError(
+          "resource-exhausted",
+          `Ya generaste el diagnóstico de este mes ${MAX_GENERATIONS_PER_MONTH} veces. Usa el que ya tienes.`
+        );
+      }
+      if (Number(lockSnap.get("until") ?? 0) > Date.now()) {
+        throw new HttpsError("failed-precondition", "Ya se está generando un diagnóstico. Espera unos segundos.");
+      }
+      tx.set(lockRef, { until: Date.now() + 120_000 });
+      return count;
+    });
+
+    try {
     // --- Datos del mes y del mes anterior ---
     const { startMs, endMs } = monthRange(month);
     const prev = monthRange(previousMonthId(month));
@@ -98,7 +111,7 @@ export const generateDiagnosis = onCall(
         .collection(`businesses/${businessId}/transactions`)
         .where("date", ">=", Timestamp.fromMillis(from))
         .where("date", "<", Timestamp.fromMillis(to))
-        .limit(5000)
+        .limit(MAX_TX_PER_MONTH)
         .get();
 
     const [txSnap, prevSnap, recSnap] = await Promise.all([
@@ -111,6 +124,12 @@ export const generateDiagnosis = onCall(
         .get(),
     ]);
 
+    if (txSnap.size >= MAX_TX_PER_MONTH || prevSnap.size >= MAX_TX_PER_MONTH) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Este mes tiene demasiados movimientos para analizarlos completos. Escríbenos para ayudarte."
+      );
+    }
     if (txSnap.empty) {
       throw new HttpsError(
         "failed-precondition",
@@ -189,5 +208,8 @@ export const generateDiagnosis = onCall(
       generationCount,
       maxGenerations: MAX_GENERATIONS_PER_MONTH,
     };
+    } finally {
+      await lockRef.set({ until: 0 }).catch(() => undefined);
+    }
   }
 );

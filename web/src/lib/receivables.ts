@@ -89,7 +89,7 @@ export function useReceivables(businessId: string | undefined) {
       });
       setReceivables(items);
       setLoading(false);
-    });
+    }, () => setLoading(false));
 
     return unsubscribe;
   }, [businessId]);
