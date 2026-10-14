@@ -94,7 +94,6 @@ async function loadPendingReceivables(businessId: string): Promise<ReceivableInp
     let q = db
       .collection(`businesses/${businessId}/receivables`)
       .where("status", "in", ["pendiente", "vencido"])
-      .orderBy(admin.firestore.FieldPath.documentId())
       .limit(PAGE);
     if (last) q = q.startAfter(last);
     const snap = await q.get();
@@ -188,11 +187,20 @@ export const generateDiagnosis = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, se
 
     try {
     // --- Datos del mes y del mes anterior: salen de los resúmenes, no de las transacciones ---
-    const [cur, prevMonth, recs] = await Promise.all([
-      loadMonth(businessId, month),
-      loadMonth(businessId, previousMonthId(month)),
-      loadPendingReceivables(businessId),
-    ]);
+    let cur: Awaited<ReturnType<typeof loadMonth>>;
+    let prevMonth: Awaited<ReturnType<typeof loadMonth>>;
+    let recs: ReceivableInput[];
+    try {
+      [cur, prevMonth, recs] = await Promise.all([
+        loadMonth(businessId, month),
+        loadMonth(businessId, previousMonthId(month)),
+        loadPendingReceivables(businessId),
+      ]);
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      logger.error("Diagnóstico: no se pudieron leer los datos del negocio", { businessId, month, err });
+      throw new HttpsError("internal", "No pudimos leer los datos de tu negocio. Intenta de nuevo en unos minutos.");
+    }
 
     if (cur.summary.count <= 0) {
       throw new HttpsError(
@@ -260,6 +268,11 @@ export const generateDiagnosis = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, se
       generationCount,
       maxGenerations: MAX_GENERATIONS_PER_MONTH,
     };
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      // Error inesperado: queda en los logs con el detalle; la persona ve un mensaje claro.
+      logger.error("Fallo inesperado generando el diagnóstico", { businessId, month, err });
+      throw new HttpsError("internal", "No se pudo generar el diagnóstico. Intenta de nuevo en unos minutos.");
     } finally {
       await lockRef.set({ until: 0 }).catch(() => undefined);
     }
