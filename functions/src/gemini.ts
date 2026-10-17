@@ -5,9 +5,9 @@ import { defineSecret } from "firebase-functions/params";
 // Se define en un solo lugar para que todas las funciones compartan el mismo secreto.
 export const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
-// Se usa el alias "gemini-flash-latest" (en vez de un ID de modelo fijo como
-// "gemini-2.5-flash") porque Google retira modelos Flash específicos con el
-// tiempo — a veces antes de la fecha de apagado anunciada. El alias siempre
-// apunta al modelo Flash vigente con cuota gratuita, evitando que la función
-// deje de funcionar sola cuando Google rota su catálogo.
-export const MODEL = "gemini-flash-latest";
+// Modelo FIJO (no un alias "latest"): así una actualización de Google no cambia en silencio
+// el comportamiento, el costo ni la cuota de las funciones de IA. Para cambiarlo sin tocar el
+// código, pon GEMINI_MODEL=<id> en functions/.env y vuelve a desplegar. Antes de subir de
+// versión, revisa https://ai.google.dev/gemini-api/docs/deprecations (fechas de retiro).
+export const DEFAULT_MODEL = "gemini-3.6-flash";
+export const MODEL = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;

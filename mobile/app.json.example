@@ -31,7 +31,7 @@
       "firebaseAuthDomain": "pinak-dev.firebaseapp.com",
       "firebaseProjectId": "pinak-dev",
       "firebaseStorageBucket": "pinak-dev.firebasestorage.app",
-      "firebaseMessagingSenderId": "47882058149",
+      "firebaseMessagingSenderId": "REEMPLAZA_CON_TU_MESSAGING_SENDER_ID",
       "firebaseAppId": "REEMPLAZA_CON_TU_APP_ID",
       "googleIosClientId": "REEMPLAZA_CON_TU_IOS_CLIENT_ID",
       "googleAndroidClientId": "REEMPLAZA_CON_TU_ANDROID_CLIENT_ID",

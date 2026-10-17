@@ -1,0 +1,20 @@
+{
+  "name": "@pinak/shared",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Código puro (sin React ni plataforma) compartido por la web y la app móvil de PINAK",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.9"
+  }
+}

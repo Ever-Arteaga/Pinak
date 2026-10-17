@@ -128,18 +128,4 @@ export function useTransactions(businessId: string | undefined, opts: Transactio
   return { transactions, loading, error, retry };
 }
 
-export function computeBalance(transactions: Transaction[]) {
-  return transactions.reduce(
-    (acc, t) => {
-      if (t.type === "ingreso") {
-        acc.totalIngresos += t.amount;
-        acc.balance += t.amount;
-      } else {
-        acc.totalEgresos += t.amount;
-        acc.balance -= t.amount;
-      }
-      return acc;
-    },
-    { balance: 0, totalIngresos: 0, totalEgresos: 0 }
-  );
-}
+export { computeBalance } from "@pinak/shared/totals";

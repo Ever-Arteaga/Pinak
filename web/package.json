@@ -8,6 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@pinak/shared": "file:../shared",
     "exceljs": "^4.4.0",
     "firebase": "^12.19.0",
     "jspdf": "^4.2.1",

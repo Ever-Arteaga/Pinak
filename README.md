@@ -37,7 +37,7 @@ pinak/
   teclado) algo como *"Vendí 60.000 en Nequi y gasté 15.000 en insumos en
   efectivo"* y la app detecta los movimientos, los muestra editables, y los guarda
 - Cloud Function (`functions/`) que llama a **Google Gemini** (alias
-  `gemini-flash-latest`, con cuota gratuita) de forma segura — la API key
+  `gemini-3.6-flash`, fijo; se cambia con `GEMINI_MODEL` en `functions/.env`) de forma segura — la API key
   nunca se expone en el cliente
 - **La IA es exclusiva de los planes Pro y Premium** — el botón se oculta por
   completo para el plan gratuito (Emprendedor), y el bloqueo se refuerza también
@@ -218,3 +218,18 @@ usando [Bold](https://bold.co) (pasarela colombiana — Nequi, PSE, tarjetas).
 - **Dependencias**: `npm audit` queda sin vulnerabilidades críticas en `functions` y `web`. Lo que sigue
   apareciendo viene de la cadena de Expo/React Native (herramientas de compilación) y de paquetes de Node que
   el navegador no usa (`@grpc/grpc-js`); se resuelve al subir de versión de Expo.
+
+## Código compartido (`shared/`)
+
+Paquete `@pinak/shared` con lo que es idéntico en web y móvil y no depende de React ni de la plataforma:
+tipos del dominio, `money`, `dates`, `months`, `filterCategoriesByType` y los totales/formatos de pesos
+(`computeBalance`, `currency`, `dateFormatter`). Cada app lo usa como dependencia local
+(`"@pinak/shared": "file:../shared"`), **sin npm workspaces**, así Vercel, `firebase deploy` y EAS Build
+instalan igual que antes. Los archivos de `web/src/lib` y `mobile/src/lib` correspondientes solo lo reexportan,
+por eso los imports de las pantallas no cambian.
+
+- Probar: `cd shared && npm install && npm test`.
+- Después de clonar o tras cambiar `shared/`: `npm install` en `web/` y en `mobile/` para enlazarlo.
+- **Vercel**: en Settings → General, "Root Directory" = `web` y activa "Include source files outside of the Root Directory in the Build Step" (viene activo por defecto).
+- **EAS Build (tiendas)**: ejecuta `eas build` desde `mobile/` con el proyecto dentro del repositorio git;
+  EAS sube el repositorio completo, así `../shared` está disponible.

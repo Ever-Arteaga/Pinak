@@ -4,34 +4,7 @@ import * as Print from "expo-print";
 import { fromByteArray } from "base64-js";
 import ExcelJS from "exceljs";
 import type { Transaction } from "../types/pinak";
-
-const currency = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
-
-const dateFormatter = new Intl.DateTimeFormat("es-CO", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
-
-function computeTotals(transactions: Transaction[]) {
-  return transactions.reduce(
-    (acc, t) => {
-      if (t.type === "ingreso") {
-        acc.totalIngresos += t.amount;
-        acc.balance += t.amount;
-      } else {
-        acc.totalEgresos += t.amount;
-        acc.balance -= t.amount;
-      }
-      return acc;
-    },
-    { balance: 0, totalIngresos: 0, totalEgresos: 0 }
-  );
-}
+import { computeBalance as computeTotals, currency, dateFormatter } from "@pinak/shared/totals";
 
 function slug(text: string) {
   return (

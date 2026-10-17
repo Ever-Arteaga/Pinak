@@ -51,6 +51,4 @@ export async function addCategory(businessId: string, name: string, type: Transa
   });
 }
 
-export function filterCategoriesByType(categories: Category[], type: TransactionType) {
-  return categories.filter((c) => c.type === type);
-}
+export { filterCategoriesByType } from "@pinak/shared/categories";
