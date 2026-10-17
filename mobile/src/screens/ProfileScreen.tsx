@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { AppHeader } from "../components/AppHeader";
 import { useBusinessGate } from "../components/BusinessGate";
 import { Button, Card, CardTitle, ErrorText, Field, InfoText, Muted } from "../components/ui";
-import { useAuthUser } from "../lib/auth";
+import { logoutUser, reauthWithPassword, useAuthUser, usesPassword } from "../lib/auth";
+import { deleteAccount } from "../lib/businessApi";
 import { updateBusinessProfile, useBusiness } from "../lib/business";
 import { useNav } from "../nav";
 import { colors, themedStyles } from "../theme";
@@ -22,6 +23,11 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [delOpen, setDelOpen] = useState(false);
+  const [delPhrase, setDelPhrase] = useState("");
+  const [delPassword, setDelPassword] = useState("");
+  const [delBusy, setDelBusy] = useState(false);
+  const [delError, setDelError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!business) return;
@@ -36,6 +42,42 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
   const gate = useBusinessGate();
   if (gate) return gate;
   const biz = business!;
+
+  const delPassMode = !!user && usesPassword(user);
+  const delReady = delPhrase.trim().toUpperCase() === "ELIMINAR" && (!delPassMode || delPassword.length > 0);
+
+  function closeDelete() {
+    setDelOpen(false);
+    setDelPhrase("");
+    setDelPassword("");
+    setDelError(null);
+  }
+
+  function askDelete() {
+    if (!user || !delReady || delBusy) return;
+    Alert.alert(
+      "¿Eliminar tu cuenta?",
+      "Se borrarán para siempre tu cuenta y tus negocios con todos sus datos. No se puede deshacer.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Eliminar", style: "destructive", onPress: () => void runDelete() },
+      ]
+    );
+  }
+
+  async function runDelete() {
+    if (!user) return;
+    setDelBusy(true);
+    setDelError(null);
+    try {
+      if (delPassMode) await reauthWithPassword(user, delPassword);
+      await deleteAccount({ confirmation: delPhrase });
+      await logoutUser().catch(() => {});
+    } catch (err) {
+      setDelError(err instanceof Error ? err.message : "No se pudo eliminar la cuenta.");
+      setDelBusy(false);
+    }
+  }
 
   async function save() {
     setError(null);
@@ -123,6 +165,31 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
             <ErrorText>{error}</ErrorText>
             <InfoText>{saved ? "Perfil actualizado." : null}</InfoText>
             {isOwner && <Button label={saving ? "Guardando..." : "Guardar cambios"} onPress={save} disabled={saving} />}
+          </Card>
+
+          <Card>
+            <CardTitle>Eliminar cuenta</CardTitle>
+            <Muted style={{ marginBottom: 8 }}>
+              Borra para siempre tu cuenta y tus negocios, con sus movimientos, fiados y categorías. Tu equipo
+              perderá el acceso. No se puede deshacer y no hay reembolso del plan.
+            </Muted>
+            {!delOpen ? (
+              <Button label="Eliminar mi cuenta" kind="danger" onPress={() => setDelOpen(true)} />
+            ) : (
+              <>
+                <Field label="Escribe ELIMINAR para confirmar" value={delPhrase} onChangeText={setDelPhrase} autoCapitalize="characters" autoCorrect={false} />
+                {delPassMode ? (
+                  <Field label="Tu contraseña" value={delPassword} onChangeText={setDelPassword} secureTextEntry autoCapitalize="none" />
+                ) : (
+                  <Muted style={{ marginBottom: 8 }}>
+                    Si entraste con Google y tu sesión no es reciente, cierra sesión, vuelve a entrar y repite esto.
+                  </Muted>
+                )}
+                <ErrorText>{delError}</ErrorText>
+                <Button label={delBusy ? "Eliminando..." : "Eliminar definitivamente"} kind="danger" onPress={askDelete} disabled={!delReady || delBusy} />
+                <Button label="Cancelar" kind="ghost" onPress={closeDelete} disabled={delBusy} />
+              </>
+            )}
           </Card>
         </ScrollView>
       </KeyboardAvoidingView>

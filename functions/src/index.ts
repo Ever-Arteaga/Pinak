@@ -210,3 +210,4 @@ export {
 } from "./businesses";
 export { generateDiagnosis } from "./diagnosis";
 export { startTrial } from "./trials";
+export { deleteAccount } from "./accounts";

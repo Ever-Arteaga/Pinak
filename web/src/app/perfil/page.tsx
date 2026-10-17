@@ -7,6 +7,7 @@ import { useAuthUser } from "@/lib/auth";
 import { useBusiness, updateBusinessProfile } from "@/lib/business";
 import { useBusinessGate } from "@/components/BusinessGate";
 import { AppHeader } from "@/components/AppHeader";
+import { DeleteAccountSection } from "@/components/DeleteAccountSection";
 import { BUSINESS_TYPES, PLAN_LIMITS, PLAN_NAMES } from "@/types/pinak";
 
 export default function PerfilEmpresaPage() {
@@ -123,7 +124,7 @@ export default function PerfilEmpresaPage() {
             )}
           </div>
           {isOwner && (
-            <Link
+            <Link prefetch={false}
               href="/upgrade"
               className="whitespace-nowrap rounded-lg border border-line px-3 py-2 text-xs font-semibold text-navy-900 transition hover:bg-cream"
             >
@@ -256,6 +257,8 @@ export default function PerfilEmpresaPage() {
           </button>
           </fieldset>
         </form>
+
+        <DeleteAccountSection />
       </div>
     </main>
   );

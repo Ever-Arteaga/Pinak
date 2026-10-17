@@ -51,6 +51,7 @@ export const inviteMember = callable<{ businessId: string; email: string }, { in
 export const acceptInvite = callable<{ inviteId: string }, { businessId: string }>("acceptInvite");
 export const declineInvite = callable<{ inviteId: string }, { ok: boolean }>("declineInvite");
 export const cancelInvite = callable<{ inviteId: string }, { ok: boolean }>("cancelInvite");
+export const deleteAccount = callable<{ confirmation: string }, { ok: boolean }>("deleteAccount");
 export const removeMember = callable<{ businessId: string; memberUid: string }, { ok: boolean }>(
   "removeMember"
 );

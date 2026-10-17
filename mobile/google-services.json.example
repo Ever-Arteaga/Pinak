@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "REEMPLAZA_CON_TU_APP_ID",
         "android_client_info": {
-          "package_name": "Pinak.Ethereal.com"
+          "package_name": "com.ethereal.pinak"
         }
       },
       "oauth_client": [

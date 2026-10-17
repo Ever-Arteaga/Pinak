@@ -8,11 +8,11 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "Pinak.Ethereal.com",
+      "bundleIdentifier": "com.ethereal.pinak",
       "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
-      "package": "Pinak.Ethereal.com",
+      "package": "com.ethereal.pinak",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#10123a",

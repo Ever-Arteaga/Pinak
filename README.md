@@ -77,7 +77,7 @@ La URL de redirección de Bold en la app móvil se configura en `app.json` → `
 3. Sube las reglas: `firebase deploy --only firestore:rules` (o pega el
    contenido de `firebase/firestore.rules` directo en la consola).
 4. Configuración del proyecto → Tus apps → registra Web, Android e iOS si
-   no existen (bundle/package sugerido: `Pinak.Ethereal.com`).
+   no existen (bundle/package sugerido: `com.ethereal.pinak`).
 
 ### Web
 
@@ -202,3 +202,19 @@ usando [Bold](https://bold.co) (pasarela colombiana — Nequi, PSE, tarjetas).
 
 - **Resúmenes agregados:** el trigger `onTransactionWritten` mantiene `businesses/{id}/summaries/{day-*|month-*|all}`. Tras desplegarlo, recalcula los datos existentes UNA vez: `cd functions` → `$env:GOOGLE_APPLICATION_CREDENTIALS="ruta\cuenta-de-servicio.json"` → `npm run backfill`. Opcional: política TTL de Firestore sobre `summaryEvents.expireAt` para limpiar eventos viejos.
 - **App Check:** la web lo activa si defines `NEXT_PUBLIC_RECAPTCHA_ENTERPRISE_SITE_KEY` (clave reCAPTCHA Enterprise registrada en Firebase → App Check). El servidor solo lo EXIGE si `APP_CHECK_ENFORCE=true` en `functions/.env`. No lo actives mientras la app móvil no envíe tokens (requiere `@react-native-firebase/app-check` y un build nativo): sus llamadas serían rechazadas.
+
+## Borrado de cuenta y seguridad (Fase 4)
+
+- **Eliminar cuenta**: Mi perfil → "Eliminar cuenta" (web y móvil). Llama a la función `deleteAccount`, que exige
+  haber iniciado sesión hace menos de 5 minutos, escribir `ELIMINAR` y confirmar con contraseña. Borra los negocios
+  propios (con movimientos, fiados, categorías y resúmenes), quita a la persona de negocios ajenos, borra sus
+  invitaciones, su perfil, su historial de pagos y su usuario de acceso. Se despliega con
+  `firebase deploy --only functions`.
+- **Cabeceras**: `firebase.json` y `web/vercel.json` llevan CSP completa, `X-Frame-Options: DENY`, HSTS y
+  `Permissions-Policy` (micrófono solo para la propia app, por el registro por voz).
+- **Bundle ID / package**: `com.ethereal.pinak`. Si ya registraste apps con el nombre anterior en Firebase,
+  registra de nuevo Android e iOS con el nuevo, descarga otra vez `google-services.json` y
+  `GoogleService-Info.plist`, y actualiza tu `mobile/app.json`.
+- **Dependencias**: `npm audit` queda sin vulnerabilidades críticas en `functions` y `web`. Lo que sigue
+  apareciendo viene de la cadena de Expo/React Native (herramientas de compilación) y de paquetes de Node que
+  el navegador no usa (`@grpc/grpc-js`); se resuelve al subir de versión de Expo.

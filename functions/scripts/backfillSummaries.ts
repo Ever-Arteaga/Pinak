@@ -47,7 +47,9 @@ async function backfillBusiness(businessId: string) {
   // Se borran los resúmenes anteriores y se escriben los nuevos.
   const old = await base.collection("summaries").listDocuments();
   const writer = db.bulkWriter();
-  old.forEach((ref) => writer.delete(ref));
+  // Solo se borran los que ya no corresponden; los demás se sobrescriben (borrar y escribir
+  // el mismo documento en el mismo lote podía dejarlo vacío).
+  old.filter((ref) => !(ref.id in built)).forEach((ref) => writer.delete(ref));
   for (const [id, s] of Object.entries(built)) {
     writer.set(base.collection("summaries").doc(id), { ...s, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
   }

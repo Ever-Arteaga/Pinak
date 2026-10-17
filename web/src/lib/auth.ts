@@ -6,6 +6,9 @@ import {
   onAuthStateChanged,
   sendEmailVerification,
   sendPasswordResetEmail,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -106,4 +109,27 @@ export async function sendPasswordReset(email: string) {
   await sendPasswordResetEmail(auth, email.trim(), {
     url: `${window.location.origin}/login`,
   });
+}
+
+/** Cómo puede confirmar su identidad la persona: con contraseña o con Google. */
+export function reauthMethod(user: User): "password" | "google" {
+  return user.providerData.some((p) => p.providerId === "password") ? "password" : "google";
+}
+
+/** Vuelve a verificar la identidad (requisito de seguridad para borrar la cuenta). */
+export async function reauthenticate(user: User, password?: string) {
+  if (reauthMethod(user) === "password") {
+    if (!user.email || !password) throw new Error("Escribe tu contraseña para continuar.");
+    try {
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+    } catch {
+      throw new Error("La contraseña no es correcta.");
+    }
+    return;
+  }
+  try {
+    await reauthenticateWithPopup(user, new GoogleAuthProvider());
+  } catch {
+    throw new Error("No se pudo confirmar tu identidad con Google. Intenta de nuevo.");
+  }
 }

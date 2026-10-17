@@ -43,12 +43,16 @@
             "value": "strict-origin-when-cross-origin"
           },
           {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          },
+          {
             "key": "Content-Security-Policy",
-            "value": "frame-ancestors 'none'"
+            "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.bold.co https://apis.google.com https://www.google.com https://www.gstatic.com https://www.recaptcha.net; style-src 'self' 'unsafe-inline' https://*.bold.co; img-src 'self' data: blob: https:; font-src 'self' data: https://*.bold.co; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.cloudfunctions.net https://*.run.app https://www.google.com https://www.gstatic.com https://www.recaptcha.net https://*.bold.co; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://www.google.com https://www.recaptcha.net https://*.bold.co; form-action 'self' https://*.bold.co; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
           },
           {
             "key": "Permissions-Policy",
-            "value": "camera=(), geolocation=(), payment=(self)"
+            "value": "camera=(), geolocation=(), microphone=(self), payment=(self)"
           }
         ]
       }

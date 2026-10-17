@@ -46,6 +46,13 @@ export const onTransactionWritten = onDocumentWritten(
 
     const { businessId } = event.params;
     const base = db.collection("businesses").doc(businessId);
+
+    // Al borrar una cuenta se borran sus movimientos: no hay que recrear resúmenes de un negocio
+    // que ya no existe o que se está eliminando.
+    if (!event.data?.after?.exists) {
+      const biz = await base.get();
+      if (!biz.exists || biz.get("deleting") === true) return;
+    }
     const eventRef = base.collection("summaryEvents").doc(event.id);
 
     await db.runTransaction(async (tx) => {

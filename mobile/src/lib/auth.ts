@@ -1,5 +1,7 @@
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   GoogleAuthProvider,
   onAuthStateChanged,
   sendEmailVerification,
@@ -93,4 +95,19 @@ export async function sendPasswordReset(email: string) {
 
 export async function logoutUser() {
   await signOut(auth);
+}
+
+/** true si la cuenta entra con correo y contraseña (si no, entra con Google). */
+export function usesPassword(user: User): boolean {
+  return user.providerData.some((p) => p.providerId === "password");
+}
+
+/** Vuelve a verificar la contraseña (requisito de seguridad para borrar la cuenta). */
+export async function reauthWithPassword(user: User, password: string) {
+  if (!user.email || !password) throw new Error("Escribe tu contraseña para continuar.");
+  try {
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+  } catch {
+    throw new Error("La contraseña no es correcta.");
+  }
 }
