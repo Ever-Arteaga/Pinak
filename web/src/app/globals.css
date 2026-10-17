@@ -13,6 +13,9 @@
   --pinak-ink-soft: #5c5f72;
   --pinak-line: #e4e3dd;
   --pinak-danger: #b3503f;
+  /* Barras del flujo de caja */
+  --pinak-bar-income: #4c8c6b;
+  --pinak-bar-expense: #dc9a8b;
 
   --background: var(--pinak-cream);
   --foreground: var(--pinak-ink);
@@ -58,9 +61,14 @@ html.dark {
   --pinak-green-100: #1c3a2d;
   --pinak-green-600: #7cc29d;
   --pinak-danger: #e8836f;
+  --pinak-bar-income: #7cc29d;
+  --pinak-bar-expense: #d98f80;
 }
 
 /* navy-900 se usa como texto y como fondo de botón: se separan los dos usos */
+/* Logo del encabezado: en modo oscuro se ve todo en blanco. */
+html.dark .pinak-logo-adapt { filter: brightness(0) invert(1); }
+
 html.dark .text-navy-900,
 html.dark .hover\:text-navy-900:hover { color: #e9ebf7; }
 html.dark .bg-navy-900 { background-color: #2f3590; }

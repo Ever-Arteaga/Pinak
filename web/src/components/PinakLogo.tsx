@@ -6,6 +6,7 @@ export function PinakMark({ size = 40 }: { size?: number }) {
     <Image
       src="/pinak-mark.png"
       alt="PINAK"
+      className="pinak-logo-adapt"
       width={size}
       height={size}
       style={{ objectFit: "contain", height: size, width: "auto" }}
@@ -22,6 +23,7 @@ export function PinakWordmark({ className = "" }: { className?: string }) {
       <Image
         src="/pinak-wordmark.png"
         alt="PINAK"
+        className="pinak-logo-adapt"
         width={100}
         height={16}
         style={{ height: 15, width: "auto" }}
