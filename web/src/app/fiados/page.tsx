@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePrivacy } from "@/lib/privacy";
 import {
   buildWhatsAppCollectionLink,
+  dueInfo,
   markReceivableAsPaid,
   useReceivables,
 } from "@/lib/receivables";
@@ -95,6 +96,13 @@ export default function ReceivablesPage() {
                     <p className="text-sm font-semibold text-ink">{r.clientName}</p>
                     <p className="mt-0.5 text-xs text-ink-soft">
                       {r.status === "pagado" ? "Pagado" : "Pendiente"}
+                      {dueInfo(r) && (
+                        <span className={dueInfo(r)!.overdue ? "font-semibold text-danger" : ""}>
+                          {" · "}
+                          {dueInfo(r)!.overdue ? "⚠ " : ""}
+                          {dueInfo(r)!.text}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <p

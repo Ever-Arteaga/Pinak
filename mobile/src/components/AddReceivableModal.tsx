@@ -22,6 +22,7 @@ export function AddReceivableModal({
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [amount, setAmount] = useState("");
+  const [dueDate, setDueDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,10 +33,12 @@ export function AddReceivableModal({
       setClientName(editingReceivable.clientName);
       setClientPhone(editingReceivable.clientPhone ?? "");
       setAmount(String(editingReceivable.amount));
+      setDueDate(toDateText(editingReceivable.dueDate));
     } else {
       setClientName("");
       setClientPhone("");
       setAmount("");
+      setDueDate("");
     }
     setError(null);
   }, [visible, editingReceivable]);
@@ -61,9 +64,19 @@ export function AddReceivableModal({
       setError("El monto es demasiado alto. Revisa que no tenga ceros de más.");
       return;
     }
+    const due = dueDate.trim() ? fromDateText(dueDate) : null;
+    if (dueDate.trim() && !due) {
+      setError("La fecha debe tener el formato DD/MM/AAAA y existir en el calendario.");
+      return;
+    }
     setSaving(true);
     try {
-      const payload = { clientName: name, clientPhone: clientPhone.trim(), amount: numericAmount };
+      const payload = {
+        clientName: name,
+        clientPhone: clientPhone.trim(),
+        amount: numericAmount,
+        dueDate: due,
+      };
       if (isEditing && editingReceivable) {
         await updateReceivable(businessId, editingReceivable.id, payload);
       } else {
@@ -137,6 +150,20 @@ export function AddReceivableModal({
           <Text style={styles.label}>Monto adeudado</Text>
           <MoneyInput style={styles.input} value={amount} onChange={setAmount} />
 
+          <Text style={styles.label}>Fecha de vencimiento (opcional)</Text>
+          <TextInput
+            style={styles.input}
+            value={dueDate}
+            onChangeText={(t) => setDueDate(maskDate(t))}
+            placeholder="DD/MM/AAAA"
+            keyboardType="number-pad"
+            maxLength={10}
+            placeholderTextColor={colors.inkSoft}
+          />
+          <Text style={styles.hint}>
+            Si pasa esta fecha sin pagar, el fiado se marca como vencido y el mensaje de cobro la incluye.
+          </Text>
+
           {error && <Text style={styles.error}>{error}</Text>}
 
           <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={busy}>
@@ -156,6 +183,33 @@ export function AddReceivableModal({
       </View>
     </Modal>
   );
+}
+
+/** Deja solo dígitos y pone las barras: 19102026 -> 19/10/2026. */
+function maskDate(raw: string): string {
+  const d = raw.replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 2) return d;
+  if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+}
+
+function toDateText(d?: Date): string {
+  if (!d) return "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+
+/** "DD/MM/AAAA" -> fin de ese día (hora local), para que venza al terminar el día. null si no es una fecha real. */
+function fromDateText(s: string): Date | null {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s.trim());
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const year = Number(m[3]);
+  const d = new Date(year, month - 1, day, 23, 59, 59);
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+  return d;
 }
 
 function traducirError(message: string): string {
@@ -187,6 +241,7 @@ const styles = themedStyles(() => StyleSheet.create({
     fontSize: 13,
     marginTop: 12,
   },
+  hint: { fontSize: 11.5, color: colors.inkSoft, marginTop: 4 },
   label: { fontSize: 13, fontWeight: "600", color: colors.ink, marginBottom: 6, marginTop: 10 },
   input: {
     borderWidth: 1,

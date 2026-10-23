@@ -20,7 +20,8 @@ interface NewReceivableInput {
   clientName: string;
   clientPhone?: string;
   amount: number;
-  dueDate?: Date;
+  /** Fecha límite de pago. En editar, `null` la borra y `undefined` la deja como está. */
+  dueDate?: Date | null;
 }
 
 export async function addReceivable(businessId: string, input: NewReceivableInput) {
@@ -51,7 +52,9 @@ export async function updateReceivable(
     clientName: input.clientName,
     clientPhone: input.clientPhone ?? "",
     amount: input.amount,
-    ...(input.dueDate ? { dueDate: Timestamp.fromDate(input.dueDate) } : {}),
+    ...(input.dueDate === undefined
+      ? {}
+      : { dueDate: input.dueDate ? Timestamp.fromDate(input.dueDate) : null }),
   });
 }
 
@@ -116,15 +119,28 @@ const currency = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
+/** Texto de vencimiento de un fiado pendiente ("Vence el 19 oct" / "Venció el 6 oct"), o null si no tiene fecha. */
+export function dueInfo(
+  r: Receivable,
+  nowMs: number = Date.now()
+): { text: string; overdue: boolean } | null {
+  if (!r.dueDate || r.status === "pagado") return null;
+  const overdue = r.dueDate.getTime() < nowMs;
+  const fecha = r.dueDate.toLocaleDateString("es-CO", { day: "numeric", month: "short" });
+  return { text: overdue ? `Venció el ${fecha}` : `Vence el ${fecha}`, overdue };
+}
+
 export function buildWhatsAppCollectionLink(
   businessName: string,
   receivable: Receivable
 ): string {
   const monto = currency.format(receivable.amount);
   const negocio = businessName.trim() || "mi negocio";
+  const venc = dueInfo(receivable);
+  const plazo = venc ? ` (${venc.text.toLowerCase()})` : "";
   const mensaje =
     `¡Hola ${receivable.clientName}! 👋 Te escribo de ${negocio} para recordarte ` +
-    `tu saldo pendiente de ${monto}. Puedes pagarlo fácilmente por Nequi o PSE ` +
+    `tu saldo pendiente de ${monto}${plazo}. Puedes pagarlo fácilmente por Nequi o PSE ` +
     `cuando gustes. ¡Gracias por tu confianza! 🙌`;
 
   const phone = normalizePhoneNumber(receivable.clientPhone);

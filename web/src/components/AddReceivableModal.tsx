@@ -23,6 +23,7 @@ export function AddReceivableModal({
   const [amount, setAmount] = useState(
     editingReceivable ? String(editingReceivable.amount) : ""
   );
+  const [dueDate, setDueDate] = useState(toDateInput(editingReceivable?.dueDate));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,9 +52,20 @@ export function AddReceivableModal({
       return;
     }
 
+    const due = fromDateInput(dueDate);
+    if (dueDate && !due) {
+      setError("La fecha de vencimiento no es válida.");
+      return;
+    }
+
     setSaving(true);
     try {
-      const payload = { clientName: name, clientPhone: clientPhone.trim(), amount: numericAmount };
+      const payload = {
+        clientName: name,
+        clientPhone: clientPhone.trim(),
+        amount: numericAmount,
+        dueDate: due,
+      };
       if (isEditing && editingReceivable) {
         await updateReceivable(businessId, editingReceivable.id, payload);
       } else {
@@ -137,6 +149,22 @@ export function AddReceivableModal({
             <MoneyInput value={amount} onChange={setAmount} />
           </div>
 
+          <div>
+            <label htmlFor="fiado-vence" className="mb-1 block text-sm font-medium text-ink">
+              Fecha de vencimiento (opcional)
+            </label>
+            <input
+              id="fiado-vence"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
+            />
+            <p className="mt-1 text-xs text-ink-soft">
+              Si pasa esta fecha sin pagar, el fiado se marca como vencido y el mensaje de cobro la incluye.
+            </p>
+          </div>
+
           {error && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-danger">{error}</p>
           )}
@@ -173,6 +201,22 @@ export function AddReceivableModal({
       )}
     </div>
   );
+}
+
+/** Date -> "AAAA-MM-DD" (hora local) para el campo de fecha. */
+function toDateInput(d?: Date): string {
+  if (!d) return "";
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** "AAAA-MM-DD" -> fin de ese día (hora local), para que venza al terminar el día. null si está vacío o es inválido. */
+function fromDateInput(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59);
+  return Number.isNaN(d.getTime()) || d.getMonth() !== Number(m[2]) - 1 ? null : d;
 }
 
 function traducirErrorFirestore(message: string): string {

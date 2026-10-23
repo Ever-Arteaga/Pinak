@@ -7,6 +7,7 @@ import {
   markReceivableAsPaid,
   openWhatsAppCollection,
   useReceivables,
+  dueInfo,
 } from "../lib/receivables";
 import { AddReceivableModal } from "../components/AddReceivableModal";
 import { AppHeader } from "../components/AppHeader";
@@ -109,13 +110,23 @@ function ReceivableRow({
   onCollect: () => void;
 }) {
   const isPaid = item.status === "pagado";
+  const due = dueInfo(item);
 
   return (
     <View style={styles.card}>
       <TouchableOpacity style={styles.cardTop} onPress={onEdit} activeOpacity={0.7}>
         <View>
           <Text style={styles.clientName}>{item.clientName}</Text>
-          <Text style={styles.status}>{isPaid ? "Pagado" : "Pendiente"}</Text>
+          <Text style={styles.status}>
+            {isPaid ? "Pagado" : "Pendiente"}
+            {due && (
+              <Text style={due.overdue ? styles.overdue : undefined}>
+                {" · "}
+                {due.overdue ? "⚠ " : ""}
+                {due.text}
+              </Text>
+            )}
+          </Text>
         </View>
         <Text style={[styles.amount, isPaid && styles.amountPaid]}>
           {currency.format(item.amount)}
@@ -170,6 +181,7 @@ const styles = themedStyles(() => StyleSheet.create({
     marginBottom: 10,
   },
   cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  overdue: { color: colors.danger, fontWeight: "700" },
   clientName: { fontSize: 14, fontWeight: "700", color: colors.ink },
   status: { fontSize: 12, color: colors.inkSoft, marginTop: 2 },
   amount: { fontSize: 14, fontWeight: "700", color: colors.title },
