@@ -10,8 +10,9 @@ pinak/
   firebase/
     firestore.rules      # Reglas de seguridad de Firestore
     DATA_MODEL.md         # Esquema de datos documentado
-  functions/              # Cloud Functions (Fase 3: registro por IA con Gemini)
+  functions/              # Cloud Functions (Node 22): IA con Gemini, pagos Bold, cuentas, admin
   web/                    # Next.js 15 + TypeScript + Tailwind (export estático)
+  shared/                 # @pinak/shared: tipos y utilidades comunes
   mobile/                 # Expo SDK 54 (React Native) + TypeScript
   firebase.json           # Config del Firebase CLI
   .firebaserc             # Alias dev/prod → proyecto pinak-dev
@@ -39,25 +40,44 @@ pinak/
 - Cloud Function (`functions/`) que llama a **Google Gemini** (alias
   `gemini-3.6-flash`, fijo; se cambia con `GEMINI_MODEL` en `functions/.env`) de forma segura — la API key
   nunca se expone en el cliente
-- **La IA es exclusiva de los planes Pro y Premium** — el botón se oculta por
+- **La IA es exclusiva de los planes de pago (Essential, Pro y Premium)** — el botón se oculta por
   completo para el plan gratuito (Emprendedor), y el bloqueo se refuerza también
   del lado del servidor (Cloud Function) por si alguien intenta saltarse la UI
 
 ## Planes
 
-| | Emprendedor | Pro | Premium |
-|---|---|---|---|
-| Precio | Gratis | $39.900/mes | $69.900/mes |
-| Movimientos, fiados y reportes | Sí | Sí | Sí |
-| Registro por voz y texto con IA | — | Ilimitado | Ilimitado |
-| Exportar reportes a PDF y Excel | — | Sí | Sí |
-| Usuarios por negocio | 1 | 2 (dueño + 1) | Ilimitados |
-| Negocios por cuenta | 1 | 1 | Ilimitados |
-| Diagnóstico financiero mensual con IA | — | — | Sí |
-| Modo privacidad (oculta montos) | — | — | Sí |
+| | Emprendedor | Essential | Pro | Premium |
+|---|---|---|---|---|
+| Para quién | Negocio (gratis) | Cuenta personal | Negocio | Negocio |
+| Precio | Gratis | $19.900 | $39.900 | $69.900 |
+| Movimientos, fiados y reportes | Sí | Sí | Sí | Sí |
+| Registro por voz y texto con IA | — | Sí | Ilimitado | Ilimitado |
+| Exportar reportes a PDF y Excel | — | Sí | Sí | Sí |
+| Usuarios por negocio | 1 | 1 | 2 (dueño + 1) | Ilimitados |
+| Negocios por cuenta | 1 | 1 | 1 | Ilimitados |
+| Diagnóstico financiero mensual con IA | — | — | — | Sí |
+| Facturas/recibos, cotizaciones, clientes, catálogo y agenda (calendario de citas) | — | — | — | Sí (solo web) |
+| Modo privacidad (oculta montos) | — | — | — | Sí |
+
+- Los pagos son únicos por 30 días (Bold), sin renovación automática.
+- **Prueba gratuita de 10 días** para Essential, Pro y Premium (una vez por plan y cuenta).
+- Essential usa lenguaje de finanzas personales (sin términos de negocio) y oculta los módulos empresariales.
+- Cuentas de prueba sin pago: la función `freePlanAccess` permite cambiar de plan libremente a los correos listados en `FREE_PLAN_EMAILS` (`functions/.env`, no se sube al repo; requiere correo verificado).
 
 Los beneficios de un negocio los define el plan de **su dueño**; las personas invitadas los heredan.
-Los límites los aplica el servidor (`functions/src/plans.ts`); `web/src/types/pinak.ts` solo los refleja en pantalla.
+Los límites los aplica el servidor (`functions/src/plans.ts`); `shared/src/types.ts` los refleja en pantalla (deben coincidir).
+
+## Facturación, cotizaciones y agenda (Premium, web)
+
+- **Recibos y facturas** con numeración consecutiva, IVA por ítem, datos fiscales del negocio (Perfil → Facturación), PDF con formato de factura, impresión y envío por WhatsApp. Marcar como pagado y eliminar (las facturas no se borran).
+- **Cotizaciones**: crear, descargar PDF, enviar y convertir en recibo/factura.
+- **Agenda**: calendario tipo Google Calendar (mes/semana/día), crear/editar/eliminar citas y bloqueo de choques de horario.
+- Pinak **no es** proveedor de facturación electrónica DIAN; un contador debe validar los documentos.
+- La app móvil aún no incluye estos módulos.
+
+## Panel de administración
+
+`/admin` muestra usuarios y planes en vivo (actualiza cada 15 s). Si borras un usuario en Firebase Auth, el trigger `onAuthUserDeleted` limpia sus datos y desaparece del panel.
 
 ### Orden de despliegue (importante)
 
@@ -124,7 +144,7 @@ siendo $0 mientras no superes las cuotas gratis.
 
 ### Cloud Functions de pago (Bold) — upgrade de plan
 
-Implementa el flujo real de cobro para pasar de Emprendedor a Pro/Premium,
+Implementa el flujo real de cobro para pasar de Emprendedor a Essential/Pro/Premium,
 usando [Bold](https://bold.co) (pasarela colombiana — Nequi, PSE, tarjetas).
 
 **Cómo funciona:**
@@ -181,7 +201,6 @@ usando [Bold](https://bold.co) (pasarela colombiana — Nequi, PSE, tarjetas).
 - Cobro automático recurrente (hoy la renovación es manual cada 30 días —
   automatizarla requiere tokenizar el método de pago, una integración más
   avanzada con Bold)
-- Recordatorio antes del vencimiento del plan
 - Historial de facturación visible para el usuario dentro de la app
 
 ## Notas técnicas importantes
