@@ -2,7 +2,7 @@
   "name": "functions",
   "description": "Cloud Functions para PINAK (registro por IA, Fase 3)",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "lib/index.js",
   "scripts": {

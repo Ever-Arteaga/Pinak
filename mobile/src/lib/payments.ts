@@ -2,7 +2,7 @@ import { httpsCallable, type FunctionsError } from "firebase/functions";
 import Constants from "expo-constants";
 import { functions } from "./firebase";
 
-export type PayablePlan = "pro" | "premium";
+export type PayablePlan = "essential" | "pro" | "premium";
 
 export interface BoldCheckoutData {
   identityKey: string;

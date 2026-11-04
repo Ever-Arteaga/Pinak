@@ -4,7 +4,7 @@ import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
 import { syncBusinessPlans } from "./businesses";
-import { expiryDecision, paymentDecision, PAID_PLAN_DAYS, type Plan, type PendingPlan } from "./plans";
+import { expiryDecision, normalizePlan, paymentDecision, PAID_PLAN_DAYS, PLAN_NAMES, type Plan, type PendingPlan } from "./plans";
 import * as crypto from "crypto";
 import { ENFORCE_APP_CHECK } from "./options";
 
@@ -22,11 +22,12 @@ const db = admin.firestore();
 const boldIdentityKey = defineSecret("BOLD_IDENTITY_KEY");
 const boldSecretKey = defineSecret("BOLD_SECRET_KEY");
 
-type PayablePlan = "pro" | "premium";
+type PayablePlan = "essential" | "pro" | "premium";
 
 // Precios en pesos colombianos, sin decimales (así los pide Bold, a diferencia
 // de otras pasarelas que piden el monto en "centavos").
 const PLAN_PRICES_COP: Record<PayablePlan, number> = {
+  essential: 19900,
   pro: 39900,
   premium: 69900,
 };
@@ -48,10 +49,10 @@ function isAllowedRedirect(url: string): boolean {
 }
 
 function toState(data: FirebaseFirestore.DocumentData | undefined) {
-  const plan: Plan = data?.plan === "pro" || data?.plan === "premium" ? data.plan : "emprendedor";
+  const plan: Plan = normalizePlan(data?.plan);
   const pp = data?.pendingPlan as { plan?: string; startAt?: admin.firestore.Timestamp; days?: number } | undefined;
   const pending: PendingPlan | null =
-    pp && (pp.plan === "pro" || pp.plan === "premium") && pp.startAt
+    pp && (pp.plan === "essential" || pp.plan === "pro" || pp.plan === "premium") && pp.startAt
       ? { plan: pp.plan, startMs: pp.startAt.toMillis(), days: Number(pp.days) || PAID_PLAN_DAYS }
       : null;
   return {
@@ -84,8 +85,8 @@ export const createBoldCheckout = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, s
     const plan = request.data?.plan as PayablePlan;
     const redirectionUrl = (request.data?.redirectionUrl ?? "").toString();
 
-    if (plan !== "pro" && plan !== "premium") {
-      throw new HttpsError("invalid-argument", "Plan inválido. Usa 'pro' o 'premium'.");
+    if (plan !== "essential" && plan !== "pro" && plan !== "premium") {
+      throw new HttpsError("invalid-argument", "Plan inválido. Usa 'essential', 'pro' o 'premium'.");
     }
     if (!isAllowedRedirect(redirectionUrl)) {
       throw new HttpsError("invalid-argument", "La URL de redirección no está permitida.");
@@ -121,7 +122,7 @@ export const createBoldCheckout = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, s
       integritySignature,
       // El orderId viaja en la URL para que la pantalla de confirmación sepa qué pago esperar.
       redirectionUrl: `${redirectionUrl.split("?")[0]}?order=${encodeURIComponent(orderId)}`,
-      description: `PINAK - Plan ${plan === "pro" ? "Pro" : "Premium"}`,
+      description: `PINAK - Plan ${PLAN_NAMES[plan]}`,
     };
   }
 );
@@ -313,7 +314,7 @@ export const downgradeExpiredPlans = onSchedule(
       .collection("users")
       .where("planExpiresAt", "<=", admin.firestore.Timestamp.now())
       .get();
-    const expired = snap.docs.filter((d) => d.get("plan") === "pro" || d.get("plan") === "premium");
+    const expired = snap.docs.filter((d) => d.get("plan") === "essential" || d.get("plan") === "pro" || d.get("plan") === "premium");
 
     if (expired.length === 0) {
       logger.info("Sin planes vencidos hoy");

@@ -11,7 +11,7 @@ interface UserProfileData {
   privacyModeEnabled: boolean;
   planTrial: boolean;
   planExpiresAt: Date | null;
-  trialsUsed: { pro: boolean; premium: boolean };
+  trialsUsed: { essential: boolean; pro: boolean; premium: boolean };
 }
 
 /** Hook en tiempo real con el perfil del negocio del usuario (incluye el plan actual). */
@@ -38,6 +38,7 @@ export function useUserProfile(userId: string | undefined) {
               planTrial: data.planTrial === true,
               planExpiresAt: data.planExpiresAt?.toDate?.() ?? null,
               trialsUsed: {
+                essential: data.trialsUsed?.essential === true,
                 pro: data.trialsUsed?.pro === true,
                 premium: data.trialsUsed?.premium === true,
               },

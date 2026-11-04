@@ -130,18 +130,23 @@ export function dueInfo(
   return { text: overdue ? `Venció el ${fecha}` : `Vence el ${fecha}`, overdue };
 }
 
+/** Enlace de WhatsApp con el mensaje de cobro. `personal` = cuenta personal (plan Essential): habla en primera persona. */
 export function buildWhatsAppCollectionLink(
   businessName: string,
-  receivable: Receivable
+  receivable: Receivable,
+  personal = false
 ): string {
   const monto = currency.format(receivable.amount);
-  const negocio = businessName.trim() || "mi negocio";
   const venc = dueInfo(receivable);
   const plazo = venc ? ` (${venc.text.toLowerCase()})` : "";
-  const mensaje =
-    `¡Hola ${receivable.clientName}! 👋 Te escribo de ${negocio} para recordarte ` +
-    `tu saldo pendiente de ${monto}${plazo}. Puedes pagarlo fácilmente por Nequi o PSE ` +
-    `cuando gustes. ¡Gracias por tu confianza! 🙌`;
+  // Sin emojis: en algunos navegadores y versiones de WhatsApp llegan como "�".
+  const mensaje = personal
+    ? `Hola ${receivable.clientName.trim().split(/\s+/)[0]}, ¿cómo estás? Te escribo para recordarte el saldo ` +
+      `pendiente de ${monto}${plazo}. Puedes pagarme por Nequi, Daviplata o transferencia cuando te quede ` +
+      `cómodo. ¡Muchas gracias!`
+    : `¡Hola ${receivable.clientName}! Te escribo de ${businessName.trim() || "mi negocio"} para recordarte ` +
+      `tu saldo pendiente de ${monto}${plazo}. Puedes pagarlo fácilmente por Nequi o PSE ` +
+      `cuando gustes. ¡Gracias por tu confianza!`;
 
   const phone = normalizePhoneNumber(receivable.clientPhone);
   const encoded = encodeURIComponent(mensaje);
@@ -161,6 +166,6 @@ function normalizePhoneNumber(raw?: string): string | null {
 }
 
 /** Abre WhatsApp con el mensaje de cobro, usando el nombre ACTUAL del negocio. */
-export async function openWhatsAppCollection(businessName: string, receivable: Receivable) {
-  await Linking.openURL(buildWhatsAppCollectionLink(businessName, receivable));
+export async function openWhatsAppCollection(businessName: string, receivable: Receivable, personal = false) {
+  await Linking.openURL(buildWhatsAppCollectionLink(businessName, receivable, personal));
 }

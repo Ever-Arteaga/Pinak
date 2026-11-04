@@ -158,13 +158,13 @@ export default function EquipoPage() {
           <section className="mt-4 rounded-2xl border border-line bg-white p-5">
             <h2 className="font-display text-sm font-semibold text-navy-900">Invitar a alguien</h2>
 
-            {biz.plan === "emprendedor" ? (
+            {biz.plan === "emprendedor" || biz.plan === "essential" ? (
               <div className="mt-3">
                 <p className="text-sm text-ink-soft">
-                  El plan {PLAN_NAMES.emprendedor} incluye 1 usuario. Con Pro puedes sumar a una
+                  El plan {PLAN_NAMES[biz.plan]} incluye 1 usuario. Con Pro puedes sumar a una
                   persona más, y con Premium a todas las que necesites.
                 </p>
-                <Link
+                <Link prefetch={false}
                   href="/upgrade"
                   className="mt-3 inline-block rounded-lg bg-navy-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-navy-800"
                 >
@@ -178,7 +178,7 @@ export default function EquipoPage() {
                 {biz.plan === "pro" && (
                   <>
                     Con{" "}
-                    <Link href="/upgrade" className="font-semibold text-navy-900 underline">
+                    <Link prefetch={false} href="/upgrade" className="font-semibold text-navy-900 underline">
                       Premium
                     </Link>{" "}
                     no hay límite.

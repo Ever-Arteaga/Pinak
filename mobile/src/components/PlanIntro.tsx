@@ -17,6 +17,12 @@ const cop = (n: number) =>
 const PLANES = [
   { id: "emprendedor", nombre: "Emprendedor", precio: "Gratis", items: ["Ingresos, egresos y fiados", "Reportes del mes", "1 usuario"] },
   {
+    id: "essential",
+    nombre: "Essential",
+    precio: `${cop(PLAN_LIMITS.essential.priceCOP)}/mes`,
+    items: ["Tus finanzas personales en orden", "Registro con IA por voz y texto", "Exporta a PDF y Excel"],
+  },
+  {
     id: "pro",
     nombre: "Pro",
     precio: `${cop(PLAN_LIMITS.pro.priceCOP)}/mes`,
@@ -56,7 +62,7 @@ export function PlanIntro({ onChoose }: { onChoose: (plan: string) => void }) {
     <Modal visible={open} animationType="slide" onRequestClose={skip}>
       <View style={styles.root}>
         <ScrollView contentContainerStyle={styles.scroll}>
-          <Text style={styles.title}>Elige el plan para tu negocio</Text>
+          <Text style={styles.title}>Elige tu plan</Text>
           <Text style={styles.sub}>Puedes cambiarlo cuando quieras. Luego crea tu cuenta o inicia sesión.</Text>
           {PLANES.map((p) => (
             <TouchableOpacity key={p.id} style={[styles.card, p.destacado && styles.cardHot]} onPress={() => choose(p.id)} activeOpacity={0.85}>

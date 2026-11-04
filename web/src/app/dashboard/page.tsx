@@ -2,247 +2,68 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { useAuthUser } from "@/lib/auth";
-import { logoutUser } from "@/lib/auth";
+import { useAuthUser, logoutUser } from "@/lib/auth";
 import { useBusiness } from "@/lib/business";
 import { useBusinessGate } from "@/components/BusinessGate";
-import { InvitationsBanner } from "@/components/InvitationsBanner";
 import { usePrivacy } from "@/lib/privacy";
-import { EyeIcon, EyeOffIcon } from "@/components/PrivacyIcons";
-import { useTransactions } from "@/lib/transactions";
-import { dayId, useAllTimeSummary, useSummaries } from "@/lib/summaries";
+import { useDashboard, type DashboardPeriod } from "@/lib/dashboard";
 import { AddTransactionModal } from "@/components/AddTransactionModal";
 import { AiQuickAddModal } from "@/components/AiQuickAddModal";
 import { AppHeader } from "@/components/AppHeader";
-import { BarChart } from "@/components/BarChart";
-import { PLAN_LIMITS, type Summary, type Transaction } from "@/types/pinak";
-
-/** Últimos 7 días (de más antiguo a hoy) con sus fechas, para pedir los resúmenes diarios. */
-function ultimos7Dias() {
-  const hoy = new Date();
-  return Array.from({ length: 7 }, (_, i) => {
-    const fecha = new Date(hoy);
-    fecha.setDate(hoy.getDate() - (6 - i));
-    return { id: dayId(fecha), label: fecha.toLocaleDateString("es-CO", { weekday: "short" }) };
-  });
-}
-
-function agruparUltimos7Dias(dias: { id: string; label: string }[], resumenes: Record<string, Summary>) {
-  return dias.map((d) => ({
-    clave: d.id,
-    label: d.label,
-    ingreso: resumenes[d.id]?.income ?? 0,
-    egreso: resumenes[d.id]?.expense ?? 0,
-  }));
-}
+import { InvitationsBanner } from "@/components/InvitationsBanner";
+import { ExpiryBanner } from "@/components/ExpiryBanner";
+import { SetupBanner } from "@/components/SetupBanner";
+import { DashboardView } from "@/components/dashboard/DashboardView";
+import type { Transaction } from "@/types/pinak";
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuthUser();
   const { business } = useBusiness();
-  const { money, available: privacyAvailable, enabled: privacyEnabled, toggle: togglePrivacy } =
-    usePrivacy();
-  // Los totales y la gráfica salen de resúmenes; solo se escuchan los 20 movimientos más recientes.
-  const { transactions, loading: txLoading, error: txError, retry: retryTx } = useTransactions(business?.id, { limit: 20 });
-  const { summary: totales, error: totalesError, retry: retryTotales } = useAllTimeSummary(business?.id);
-  const dias7 = ultimos7Dias();
-  const { items: resumenesDia } = useSummaries(business?.id, dias7[0].id, dias7[6].id);
+  const { money, available, enabled, toggle } = usePrivacy();
+
+  const [period, setPeriod] = useState<DashboardPeriod>("30d");
+  const dash = useDashboard(business?.id, period);
+
   const [showModal, setShowModal] = useState(false);
-  const [showAiModal, setShowAiModal] = useState(false);
+  const [aiRequest, setAiRequest] = useState<{ text: string; voice: boolean } | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login");
-    }
+    if (!authLoading && !user) router.push("/login");
   }, [authLoading, user, router]);
 
   const gate = useBusinessGate();
   if (gate) return gate;
   const biz = business!;
 
-  const totalIngresos = totales.income;
-  const totalEgresos = totales.expense;
-  const balance = totalIngresos - totalEgresos;
-  const recientes = transactions.slice(0, 8);
-  const datosGrafica = agruparUltimos7Dias(dias7, resumenesDia);
-
   return (
-    <main className="min-h-screen bg-cream pb-24">
-      {/* Header */}
-      <AppHeader onLogout={() => logoutUser()} />
+    <>
+      <DashboardView
+        businessName={biz.name}
+        plan={biz.plan}
+        userName={user?.displayName?.trim().split(/\s+/)[0] || biz.name}
+        period={period}
+        onPeriodChange={setPeriod}
+        dash={dash}
+        money={money}
+        privacy={{ available, enabled, toggle: () => void toggle() }}
+        onNewTransaction={() => setShowModal(true)}
+        onAiDetect={(text, voice) => setAiRequest({ text, voice })}
+        onSelectTransaction={setEditingTransaction}
+        header={<AppHeader onLogout={() => logoutUser()} />}
+        banner={<><InvitationsBanner /><ExpiryBanner /><SetupBanner /></>}
+      />
 
-      <div className="mx-auto w-full max-w-md px-5 pt-6 md:max-w-2xl md:px-8 lg:max-w-4xl">
-        <div className="grid gap-4 lg:grid-cols-2">
-        {/* Tarjeta de balance total */}
-        <section className="rounded-2xl bg-navy-900 p-6 text-white shadow-sm">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-white/70">Balance total</p>
-            {privacyAvailable && (
-              <button
-                onClick={() => togglePrivacy()}
-                aria-label={privacyEnabled ? "Mostrar montos" : "Ocultar montos"}
-                title={privacyEnabled ? "Mostrar montos" : "Ocultar montos"}
-                className="-mr-2 -mt-2 rounded-lg p-2 text-white/70 transition hover:bg-white/10 hover:text-white"
-              >
-                {privacyEnabled ? <EyeOffIcon /> : <EyeIcon />}
-              </button>
-            )}
-          </div>
-          <p className="font-display mt-1 text-3xl font-semibold tracking-tight">
-            {money(balance)}
-          </p>
-          <div className="mt-5 flex gap-6">
-            <div>
-              <p className="text-xs text-white/60">Ingresos</p>
-              <p className="text-sm font-medium text-green-500">
-                {money(totalIngresos)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-white/60">Egresos</p>
-              <p className="text-sm font-medium text-red-300">
-                {money(totalEgresos)}
-              </p>
-            </div>
-          </div>
-        </section>
+      {showModal && <AddTransactionModal businessId={biz.id} onClose={() => setShowModal(false)} />}
 
-        {/* Gráfica de ingresos vs egresos */}
-        <section className="rounded-2xl border border-line bg-white p-5">
-          <h2 className="font-display text-sm font-semibold text-navy-900">
-            Últimos 7 días
-          </h2>
-          <div className="mt-3">
-            <BarChart data={datosGrafica} formatValue={(v) => money(v)} />
-          </div>
-        </section>
-        </div>
-
-        <InvitationsBanner />
-
-        {/* Registro rápido con IA — solo planes Pro y Premium */}
-        {PLAN_LIMITS[biz.plan].aiEnabled && (
-          <button
-            onClick={() => setShowAiModal(true)}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-3.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
-          >
-            <span aria-hidden>✨</span>
-            Registrar con IA (voz o texto)
-          </button>
-        )}
-
-        {!PLAN_LIMITS[biz.plan].aiEnabled && (
-          <Link
-            href="/upgrade"
-            className="mt-4 flex w-full items-center justify-between gap-2 rounded-xl border border-dashed border-line bg-white px-4 py-3.5 text-sm transition hover:bg-cream"
-          >
-            <span className="text-ink">
-              <span aria-hidden>✨</span> Registra tus ventas hablando o
-              escribiendo con IA
-            </span>
-            <span className="whitespace-nowrap font-semibold text-navy-900">
-              Actualizar →
-            </span>
-          </Link>
-        )}
-
-        {/* Acciones rápidas */}
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <button
-            onClick={() => setShowModal(true)}
-            className="rounded-xl bg-green-600 py-3 text-sm font-semibold text-white transition hover:bg-green-500"
-          >
-            + Nuevo registro
-          </button>
-          <Link
-            href="/fiados"
-            className="flex items-center justify-center rounded-xl border border-line bg-white py-3 text-sm font-semibold text-navy-900 transition hover:bg-green-100"
-          >
-            Fiados
-          </Link>
-          <Link
-            href="/reportes"
-            className="flex items-center justify-center rounded-xl border border-line bg-white py-3 text-sm font-semibold text-navy-900 transition hover:bg-green-100"
-          >
-            Reportes
-          </Link>
-        </div>
-
-        {/* Últimas transacciones */}
-        <section className="mt-8">
-          <h2 className="font-display text-sm font-semibold uppercase tracking-wide text-ink-soft">
-            Movimientos recientes
-          </h2>
-
-          <div className="mt-3 divide-y divide-line rounded-2xl border border-line bg-white">
-            {(txError || totalesError) && (
-              <div className="px-4 py-6 text-center">
-                <p className="text-sm text-danger">{txError ?? totalesError}</p>
-                <button
-                  onClick={() => {
-                    retryTx();
-                    retryTotales();
-                  }}
-                  className="mt-3 rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-navy-800"
-                >
-                  Reintentar
-                </button>
-              </div>
-            )}
-
-            {txLoading && (
-              <p className="px-4 py-6 text-center text-sm text-ink-soft">
-                Cargando movimientos...
-              </p>
-            )}
-
-            {!txLoading && !txError && recientes.length === 0 && (
-              <div className="px-4 py-8 text-center">
-                <p className="text-sm font-medium text-ink">Aún no tienes registros</p>
-                <p className="mt-1 text-sm text-ink-soft">
-                  Agrega tu primer ingreso o egreso para ver tu balance aquí.
-                </p>
-              </div>
-            )}
-
-            {recientes.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setEditingTransaction(t)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-cream"
-              >
-                <div>
-                  <p className="text-sm font-medium text-ink">{t.category}</p>
-                  <p className="text-xs text-ink-soft">
-                    {t.method.charAt(0).toUpperCase() + t.method.slice(1)} ·{" "}
-                    {t.date.toLocaleDateString("es-CO", {
-                      day: "2-digit",
-                      month: "short",
-                    })}
-                  </p>
-                </div>
-                <p
-                  className={`text-sm font-semibold ${
-                    t.type === "ingreso" ? "text-green-600" : "text-danger"
-                  }`}
-                >
-                  {t.type === "ingreso" ? "+" : "-"}
-                  {money(t.amount)}
-                </p>
-              </button>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      {showModal && (
-        <AddTransactionModal businessId={biz.id} onClose={() => setShowModal(false)} />
-      )}
-
-      {showAiModal && (
-        <AiQuickAddModal businessId={biz.id} onClose={() => setShowAiModal(false)} />
+      {aiRequest && (
+        <AiQuickAddModal
+          businessId={biz.id}
+          initialText={aiRequest.text}
+          initialVoice={aiRequest.voice}
+          onClose={() => setAiRequest(null)}
+        />
       )}
 
       {editingTransaction && (
@@ -252,6 +73,6 @@ export default function DashboardPage() {
           onClose={() => setEditingTransaction(null)}
         />
       )}
-    </main>
+    </>
   );
 }

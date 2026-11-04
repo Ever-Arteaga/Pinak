@@ -53,6 +53,11 @@ Reglas:
 - Nunca inventes montos ni categorías que no estén implícitas en el mensaje.
 - No agregues explicaciones, comentarios ni markdown. Solo el array JSON.`;
 
+/** Las cuentas Essential son personales: las categorías y el lenguaje cambian. */
+const PERSONAL_NOTE = `
+
+Contexto: esta es una cuenta PERSONAL (no un negocio). Usa categorías personales como Salario, Mercado, Arriendo, Servicios públicos, Transporte, Salud, Educación, Ocio, Otros ingresos u Otros gastos. Un pago recibido de un trabajo es "Salario".`;
+
 export const parseTransactionText = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, secrets: [geminiApiKey], region: "us-central1" },
   async (request) => {
     if (!request.auth) {
@@ -90,7 +95,7 @@ export const parseTransactionText = onCall({ enforceAppCheck: ENFORCE_APP_CHECK,
     if (!PLAN_LIMITS[normalizePlan(biz.plan)].ai) {
       throw new HttpsError(
         "permission-denied",
-        "El registro con IA está disponible en los planes Pro y Premium. Mejora tu plan para usarlo."
+        "El registro con IA está disponible en los planes Essential, Pro y Premium. Mejora tu plan para usarlo."
       );
     }
 
@@ -117,7 +122,7 @@ export const parseTransactionText = onCall({ enforceAppCheck: ENFORCE_APP_CHECK,
           model: MODEL,
           contents: text,
           config: {
-            systemInstruction: SYSTEM_PROMPT,
+            systemInstruction: normalizePlan(biz.plan) === "essential" ? SYSTEM_PROMPT + PERSONAL_NOTE : SYSTEM_PROMPT,
             responseMimeType: "application/json",
           },
         });
@@ -210,4 +215,6 @@ export {
 } from "./businesses";
 export { generateDiagnosis } from "./diagnosis";
 export { startTrial } from "./trials";
-export { deleteAccount } from "./accounts";
+export { deleteAccount, onAuthUserDeleted } from "./accounts";
+export { adminOverview } from "./admin";
+export { freePlanAccess } from "./freePlan";

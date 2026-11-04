@@ -39,7 +39,8 @@ function callable<TIn, TOut>(name: string) {
 export const ensureBusiness = callable<{ businessName?: string }, { businessId: string; created: boolean }>(
   "ensureBusiness"
 );
-export const startTrial = callable<{ plan: "pro" | "premium" }, { plan: string; days: number }>("startTrial");
+export const freePlanAccess = callable<{ plan?: "emprendedor" | "essential" | "pro" | "premium" }, { enabled: boolean; plan?: string }>("freePlanAccess");
+export const startTrial = callable<{ plan: "essential" | "pro" | "premium" }, { plan: string; days: number }>("startTrial");
 export const createBusiness = callable<
   { name: string; businessType?: string; phone?: string; city?: string },
   { businessId: string }

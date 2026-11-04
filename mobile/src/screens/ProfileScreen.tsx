@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as ImagePicker from "expo-image-picker";
+import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { AppHeader } from "../components/AppHeader";
 import { useBusinessGate } from "../components/BusinessGate";
 import { Button, Card, CardTitle, ErrorText, Field, InfoText, Muted } from "../components/ui";
 import { logoutUser, reauthWithPassword, useAuthUser, usesPassword } from "../lib/auth";
 import { deleteAccount } from "../lib/businessApi";
-import { updateBusinessProfile, useBusiness } from "../lib/business";
+import { updateBusinessPhoto, updateBusinessProfile, useBusiness } from "../lib/business";
 import { useNav } from "../nav";
 import { colors, themedStyles } from "../theme";
 import { BUSINESS_TYPES, PLAN_LIMITS, PLAN_NAMES } from "../types/pinak";
@@ -23,6 +25,7 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
   const [delPhrase, setDelPhrase] = useState("");
   const [delPassword, setDelPassword] = useState("");
@@ -57,7 +60,7 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
     if (!user || !delReady || delBusy) return;
     Alert.alert(
       "¿Eliminar tu cuenta?",
-      "Se borrarán para siempre tu cuenta y tus negocios con todos sus datos. No se puede deshacer.",
+      personal ? "Se borrarán para siempre tu cuenta y todos tus datos. No se puede deshacer." : "Se borrarán para siempre tu cuenta y tus negocios con todos sus datos. No se puede deshacer.",
       [
         { text: "Cancelar", style: "cancel" },
         { text: "Eliminar", style: "destructive", onPress: () => void runDelete() },
@@ -79,11 +82,53 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
     }
   }
 
+  async function pickPhoto() {
+    setError(null);
+    setPhotoBusy(true);
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        setError("Da permiso a tus fotos para elegir una imagen.");
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      });
+      if (res.canceled || !res.assets[0]) return;
+      const out = await ImageManipulator.manipulateAsync(
+        res.assets[0].uri,
+        [{ resize: { width: 256, height: 256 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+      if (!out.base64) throw new Error("sin datos");
+      await updateBusinessPhoto(biz.id, `data:image/jpeg;base64,${out.base64}`);
+    } catch {
+      setError("No se pudo guardar la foto. Intenta con otra imagen.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function removePhoto() {
+    setError(null);
+    setPhotoBusy(true);
+    try {
+      await updateBusinessPhoto(biz.id, null);
+    } catch {
+      setError("No se pudo quitar la foto.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
   async function save() {
     setError(null);
     setSaved(false);
     if (name.trim().length < 2) {
-      setError("El nombre del negocio es muy corto.");
+      setError(personal ? "El nombre de tu cuenta es muy corto." : "El nombre del negocio es muy corto.");
       return;
     }
     setSaving(true);
@@ -106,6 +151,7 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
   }
 
   const price = PLAN_LIMITS[biz.plan].priceCOP;
+  const personal = biz.plan === "essential";
 
   return (
     <View style={styles.container}>
@@ -115,13 +161,31 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
           <Card>
             <View style={styles.headRow}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{(name || "?").trim().slice(0, 2).toUpperCase()}</Text>
+                {biz.photoURL ? (
+                  <Image source={{ uri: biz.photoURL }} style={styles.avatarImg} />
+                ) : (
+                  <Text style={styles.avatarText}>{(name || "?").trim().slice(0, 2).toUpperCase()}</Text>
+                )}
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.headName} numberOfLines={1}>
-                  {name || "Tu negocio"}
+                  {name || (personal ? "Tu cuenta" : "Tu negocio")}
                 </Text>
                 <Muted>{user?.email}</Muted>
+                {isOwner && (
+                  <View style={styles.photoRow}>
+                    <TouchableOpacity onPress={pickPhoto} disabled={photoBusy} style={styles.planBtn}>
+                      <Text style={styles.planBtnText}>
+                        {photoBusy ? "Guardando..." : biz.photoURL ? "Cambiar foto" : "Subir foto"}
+                      </Text>
+                    </TouchableOpacity>
+                    {!!biz.photoURL && !photoBusy && (
+                      <TouchableOpacity onPress={removePhoto} style={styles.planBtn}>
+                        <Text style={[styles.planBtnText, { color: colors.danger }]}>Quitar</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
               </View>
             </View>
           </Card>
@@ -142,11 +206,11 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
           </Card>
 
           <Card>
-            <CardTitle>Datos del negocio</CardTitle>
+            <CardTitle>{personal ? "Datos de tu cuenta" : "Datos del negocio"}</CardTitle>
             {!isOwner && <Muted style={{ marginBottom: 8 }}>Solo el dueño puede editar estos datos.</Muted>}
-            <Field label="Nombre del negocio" value={name} onChangeText={setName} editable={isOwner} placeholder="Ej. Tienda Doña Rosa" maxLength={80} />
-            <Text style={styles.label}>Tipo de negocio</Text>
-            <View style={styles.chips}>
+            <Field label={personal ? "Tu nombre" : "Nombre del negocio"} value={name} onChangeText={setName} editable={isOwner} placeholder={personal ? "Ej. María Pérez" : "Ej. Tienda Doña Rosa"} maxLength={80} />
+            {!personal && <Text style={styles.label}>Tipo de negocio</Text>}
+            {!personal && <View style={styles.chips}>
               {BUSINESS_TYPES.map((t) => (
                 <TouchableOpacity
                   key={t}
@@ -157,11 +221,11 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
                   <Text style={[styles.chipText, type === t && styles.chipTextActive]}>{t}</Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </View>}
             <Field label="Teléfono" value={phone} onChangeText={setPhone} editable={isOwner} keyboardType="phone-pad" placeholder="Ej. 3001234567" />
             <Field label="Ciudad" value={city} onChangeText={setCity} editable={isOwner} placeholder="Ej. Cartagena" />
-            <Field label="NIT o documento (opcional)" value={nit} onChangeText={setNit} editable={isOwner} placeholder="Ej. 901234567-8" />
-            <Field label="Descripción breve (opcional)" value={description} onChangeText={setDescription} editable={isOwner} multiline placeholder="¿A qué se dedica tu negocio?" />
+            <Field label={personal ? "Cédula (opcional)" : "NIT o documento (opcional)"} value={nit} onChangeText={setNit} editable={isOwner} placeholder="Ej. 901234567-8" />
+            {!personal && <Field label="Descripción breve (opcional)" value={description} onChangeText={setDescription} editable={isOwner} multiline placeholder="¿A qué se dedica tu negocio?" />}
             <ErrorText>{error}</ErrorText>
             <InfoText>{saved ? "Perfil actualizado." : null}</InfoText>
             {isOwner && <Button label={saving ? "Guardando..." : "Guardar cambios"} onPress={save} disabled={saving} />}
@@ -170,8 +234,7 @@ export default function ProfileScreen({ onBack }: { onBack: () => void }) {
           <Card>
             <CardTitle>Eliminar cuenta</CardTitle>
             <Muted style={{ marginBottom: 8 }}>
-              Borra para siempre tu cuenta y tus negocios, con sus movimientos, fiados y categorías. Tu equipo
-              perderá el acceso. No se puede deshacer y no hay reembolso del plan.
+              {personal ? "Borra para siempre tu cuenta con todos tus movimientos, fiados y categorías. No se puede deshacer y no hay reembolso del plan." : "Borra para siempre tu cuenta y tus negocios, con sus movimientos, fiados y categorías. Tu equipo perderá el acceso. No se puede deshacer y no hay reembolso del plan."}
             </Muted>
             {!delOpen ? (
               <Button label="Eliminar mi cuenta" kind="danger" onPress={() => setDelOpen(true)} />
@@ -202,7 +265,9 @@ const styles = themedStyles(() =>
     container: { flex: 1, backgroundColor: colors.cream },
     content: { padding: 16, paddingBottom: 60 },
     headRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-    avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.navy900, alignItems: "center", justifyContent: "center" },
+    avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.navy900, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+    avatarImg: { width: 64, height: 64 },
+    photoRow: { flexDirection: "row", gap: 8, marginTop: 8 },
     avatarText: { color: colors.onNavy, fontWeight: "700", fontSize: 16 },
     headName: { fontSize: 16, fontWeight: "700", color: colors.title },
     plan: { fontSize: 14, fontWeight: "700", color: colors.title, marginTop: 2 },

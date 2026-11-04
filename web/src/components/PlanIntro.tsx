@@ -25,6 +25,12 @@ const PLANES = [
     items: ["Ingresos, egresos y fiados", "Reportes del mes", "1 usuario"],
   },
   {
+    id: "essential",
+    nombre: "Essential",
+    precio: `${cop(PLAN_LIMITS.essential.priceCOP)}/mes`,
+    items: ["Tus finanzas personales en orden", "Registro con IA por voz y texto", "Exporta a PDF y Excel"],
+  },
+  {
     id: "pro",
     nombre: "Pro",
     precio: `${cop(PLAN_LIMITS.pro.priceCOP)}/mes`,
@@ -79,12 +85,12 @@ export function PlanIntro({ onChoose }: { onChoose: (plan: string) => void }) {
       `}</style>
       <div className="mx-auto max-w-4xl">
         <h2 className="font-display text-center text-2xl font-semibold text-white">
-          Elige el plan para tu negocio
+          Elige tu plan
         </h2>
         <p className="mt-1 text-center text-sm text-white/70">
           Puedes cambiarlo cuando quieras. Luego crea tu cuenta o inicia sesión.
         </p>
-        <div className="mt-8 grid gap-5 md:grid-cols-3">
+        <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           {PLANES.map((p, i) => (
             <button
               key={p.id}

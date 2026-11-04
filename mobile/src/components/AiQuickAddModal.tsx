@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Modal,
   ScrollView,
@@ -25,10 +25,13 @@ export function AiQuickAddModal({
   visible,
   businessId,
   onClose,
+  initialText,
 }: {
   visible: boolean;
   businessId: string;
   onClose: () => void;
+  /** Si viene con texto, se analiza apenas se abre y se salta al paso de confirmación. */
+  initialText?: string;
 }) {
   const [step, setStep] = useState<Step>("input");
   const [text, setText] = useState("");
@@ -52,12 +55,26 @@ export function AiQuickAddModal({
     onClose();
   }
 
-  async function handleAnalyze() {
-    if (!text.trim()) return;
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (!visible) {
+      autoRan.current = false;
+      return;
+    }
+    if (initialText?.trim() && !autoRan.current) {
+      autoRan.current = true;
+      setText(initialText);
+      void handleAnalyze(initialText);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, initialText]);
+
+  async function handleAnalyze(raw: string = text) {
+    if (!raw.trim()) return;
     setProcessing(true);
     setError(null);
     try {
-      const result = await parseTransactionText(text.trim(), businessId);
+      const result = await parseTransactionText(raw.trim(), businessId);
       if (result.transactions.length === 0) {
         setError(
           "No pude identificar ningún movimiento en ese mensaje. Intenta ser más específico (monto, si fue ingreso o gasto)."
@@ -138,7 +155,7 @@ export function AiQuickAddModal({
               {error && <Text style={styles.error}>{error}</Text>}
               <TouchableOpacity
                 style={[styles.primaryButton, (!text.trim() || processing) && styles.disabled]}
-                onPress={handleAnalyze}
+                onPress={() => handleAnalyze()}
                 disabled={!text.trim() || processing}
               >
                 <Text style={styles.primaryButtonText}>

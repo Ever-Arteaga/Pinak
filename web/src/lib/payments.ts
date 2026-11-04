@@ -3,7 +3,7 @@
 import { httpsCallable, type FunctionsError } from "firebase/functions";
 import { functions } from "./firebase";
 
-type PayablePlan = "pro" | "premium";
+type PayablePlan = "essential" | "pro" | "premium";
 
 interface BoldCheckoutData {
   identityKey: string;

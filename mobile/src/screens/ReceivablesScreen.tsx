@@ -70,7 +70,7 @@ export default function ReceivablesScreen({ onBack }: { onBack: () => void }) {
             {loading && <Text style={styles.emptyText}>Cargando fiados...</Text>}
             {!loading && !error && receivables.length === 0 && (
               <Text style={styles.emptyText}>
-                Sin fiados registrados. Cuando un cliente te deba, regístralo aquí.
+                Sin fiados registrados. {business?.plan === "essential" ? "Cuando alguien te deba plata, regístralo aquí." : "Cuando un cliente te deba, regístralo aquí."}
               </Text>
             )}
           </>
@@ -80,7 +80,7 @@ export default function ReceivablesScreen({ onBack }: { onBack: () => void }) {
             item={item}
             onEdit={() => setEditingReceivable(item)}
             onMarkPaid={() => markReceivableAsPaid(biz.id, item.id)}
-            onCollect={() => openWhatsAppCollection(businessName, item)}
+            onCollect={() => openWhatsAppCollection(businessName, item, biz.plan === "essential")}
           />
         )}
       />

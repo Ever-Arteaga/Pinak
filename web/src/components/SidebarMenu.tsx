@@ -147,6 +147,15 @@ function NegociosIcon() {
   );
 }
 
+function AgendaIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="15" rx="2" stroke="currentColor" strokeWidth={2} />
+      <path d="M4 10h16M9 3v4M15 3v4" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function ChevronIcon({ open }: { open: boolean }) {
   return (
     <svg
@@ -168,20 +177,29 @@ const ENLACES: {
   icon: () => React.JSX.Element;
   /** Plan mínimo que incluye esta sección (se muestra una etiqueta si aún no lo tiene). */
   needs?: "pro" | "premium";
+  /** Sección pensada para negocios: no se muestra en las cuentas personales (plan Essential). */
+  business?: boolean;
+  /** Solo se muestra si el negocio respondió que atiende con citas. */
+  onlyIf?: "agenda";
 }[] = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon },
   { href: "/fiados", label: "Fiados", icon: FiadosIcon },
+  { href: "/agenda", label: "Agenda", icon: AgendaIcon, business: true, needs: "premium", onlyIf: "agenda" },
+  { href: "/recibos", label: "Recibos", icon: ReportesIcon, business: true, needs: "premium" },
+  { href: "/cotizaciones", label: "Cotizaciones", icon: ReportesIcon, business: true, needs: "premium" },
+  { href: "/clientes", label: "Clientes", icon: EquipoIcon, business: true, needs: "premium" },
+  { href: "/productos", label: "Catálogo", icon: NegociosIcon, business: true, needs: "premium" },
   { href: "/reportes", label: "Reportes", icon: ReportesIcon },
   { href: "/diagnostico", label: "Diagnóstico IA", icon: DiagnosticoIcon, needs: "premium" },
-  { href: "/equipo", label: "Equipo", icon: EquipoIcon, needs: "pro" },
-  { href: "/negocios", label: "Negocios", icon: NegociosIcon, needs: "premium" },
+  { href: "/equipo", label: "Equipo", icon: EquipoIcon, business: true, needs: "pro" },
+  { href: "/negocios", label: "Negocios", icon: NegociosIcon, business: true, needs: "premium" },
   { href: "/perfil", label: "Mi perfil", icon: PerfilIcon },
   { href: "/upgrade", label: "Planes", icon: PlanesIcon },
 ];
 
 function lacksPlan(needs: "pro" | "premium" | undefined, plan: Plan): boolean {
   if (needs === "premium") return plan !== "premium";
-  if (needs === "pro") return plan === "emprendedor";
+  if (needs === "pro") return plan === "emprendedor" || plan === "essential";
   return false;
 }
 
@@ -191,6 +209,7 @@ export function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => v
   const { business, businesses, switchBusiness } = useBusiness();
   const [switching, setSwitching] = useState(false);
   const plan: Plan = business?.plan ?? "emprendedor";
+  const personal = plan === "essential";
   const { available: privacyAvailable, enabled: privacyEnabled, toggle: togglePrivacy } =
     usePrivacy();
 
@@ -260,7 +279,7 @@ export function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => v
                   {business.name}
                 </span>
                 <span className="block text-[11px] text-ink-soft">
-                  {businesses.length > 1 ? `${businesses.length} negocios` : "Tu negocio"}
+                  {businesses.length > 1 ? `${businesses.length} negocios` : personal ? "Tu cuenta personal" : "Tu negocio"}
                 </span>
               </span>
               {businesses.length > 1 && <ChevronIcon open={switching} />}
@@ -292,10 +311,10 @@ export function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => v
         )}
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
-          {ENLACES.map((enlace) => {
+          {ENLACES.filter((e) => (!e.onlyIf || business?.usesAppointments === true) && !(personal && e.business)).map((enlace) => {
             const activo = pathname === enlace.href;
             return (
-              <Link
+              <Link prefetch={false}
                 key={enlace.href}
                 href={enlace.href}
                 onClick={onClose}
@@ -346,7 +365,7 @@ export function SidebarMenu({ open, onClose }: { open: boolean; onClose: () => v
               </span>
             </button>
           ) : (
-            <Link
+            <Link prefetch={false}
               href="/upgrade"
               onClick={onClose}
               className="flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft transition hover:bg-cream hover:text-navy-900"

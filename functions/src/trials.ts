@@ -10,7 +10,7 @@ if (admin.apps.length === 0) {
 }
 const db = admin.firestore();
 
-/** Activa 15 días gratis de Pro o Premium (una vez por plan y por cuenta). */
+/** Activa 10 días gratis de Essential, Pro o Premium (una vez por plan y por cuenta). */
 export const startTrial = onCall({ enforceAppCheck: ENFORCE_APP_CHECK, region: "us-central1" }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Inicia sesión para continuar.");

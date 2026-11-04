@@ -73,7 +73,7 @@ export default function LoginPage() {
 
   function afterAuthPath() {
     const plan = readIntroPlan();
-    return plan === "pro" || plan === "premium" ? "/upgrade" : "/dashboard";
+    return plan === "essential" || plan === "pro" || plan === "premium" ? "/upgrade" : "/dashboard";
   }
 
   async function handleGoogleSignIn() {
@@ -120,8 +120,8 @@ export default function LoginPage() {
               ? "Ingresa a tu negocio en piloto automático."
               : mode === "reset"
               ? "Te enviaremos un enlace a tu correo para crear una nueva."
-              : chosenPlan === "pro" || chosenPlan === "premium"
-              ? `Elegiste el plan ${chosenPlan === "pro" ? "Pro" : "Premium"}: crea tu cuenta y activa el pago.`
+              : chosenPlan === "essential" || chosenPlan === "pro" || chosenPlan === "premium"
+              ? `Elegiste el plan ${chosenPlan === "essential" ? "Essential" : chosenPlan === "pro" ? "Pro" : "Premium"}: crea tu cuenta y activa el pago.`
               : "Empieza gratis, sin tarjeta de crédito."}
           </p>
 

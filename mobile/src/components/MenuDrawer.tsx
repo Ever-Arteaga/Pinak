@@ -41,7 +41,7 @@ export function MenuDrawer({
 
             {business && (
               <View style={styles.bizBox}>
-                <Text style={styles.bizLabel}>Negocio activo</Text>
+                <Text style={styles.bizLabel}>{business.plan === "essential" ? "Tu cuenta personal" : "Negocio activo"}</Text>
                 <Text style={styles.bizName} numberOfLines={1}>
                   {business.name}
                 </Text>
@@ -66,7 +66,7 @@ export function MenuDrawer({
               </View>
             )}
 
-            {ITEMS.map((item) => (
+            {ITEMS.filter((item) => !(business?.plan === "essential" && (item.screen === "team" || item.screen === "businesses"))).map((item) => (
               <TouchableOpacity
                 key={item.screen}
                 style={[styles.item, current === item.screen && styles.itemActive]}

@@ -12,10 +12,12 @@ import { AddReceivableModal } from "@/components/AddReceivableModal";
 import { AppHeader } from "@/components/AppHeader";
 import { useBusiness } from "@/lib/business";
 import { useBusinessGate } from "@/components/BusinessGate";
+import { usePersonal } from "@/lib/personal";
 import type { Receivable } from "@/types/pinak";
 
 export default function ReceivablesPage() {
   const { business } = useBusiness();
+  const personal = usePersonal();
   const { money } = usePrivacy();
   const { receivables, loading, error, retry } = useReceivables(business?.id);
   const [showModal, setShowModal] = useState(false);
@@ -77,7 +79,7 @@ export default function ReceivablesPage() {
               <div className="rounded-2xl border border-line bg-white px-4 py-8 text-center">
                 <p className="text-sm font-medium text-ink">Sin fiados registrados</p>
                 <p className="mt-1 text-sm text-ink-soft">
-                  Cuando un cliente te deba, regístralo aquí y cóbralo por WhatsApp en 1 clic.
+                  {personal ? "Cuando alguien te deba plata, regístralo aquí" : "Cuando un cliente te deba, regístralo aquí"} y cóbralo por WhatsApp en 1 clic.
                 </p>
               </div>
             )}
@@ -119,7 +121,8 @@ export default function ReceivablesPage() {
                     <a
                       href={buildWhatsAppCollectionLink(
                         biz.name,
-                        r
+                        r,
+                        personal
                       )}
                       target="_blank"
                       rel="noopener noreferrer"

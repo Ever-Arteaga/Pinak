@@ -40,7 +40,8 @@ function callable<TIn, TOut>(name: string) {
 export const ensureBusiness = callable<{ businessName?: string }, { businessId: string; created: boolean }>(
   "ensureBusiness"
 );
-export const startTrial = callable<{ plan: "pro" | "premium" }, { plan: string; days: number }>("startTrial");
+export const freePlanAccess = callable<{ plan?: "emprendedor" | "essential" | "pro" | "premium" }, { enabled: boolean; plan?: string }>("freePlanAccess");
+export const startTrial = callable<{ plan: "essential" | "pro" | "premium" }, { plan: string; days: number }>("startTrial");
 export const createBusiness = callable<
   { name: string; businessType?: string; phone?: string; city?: string },
   { businessId: string }
@@ -63,3 +64,32 @@ export const generateDiagnosis = callable<
   { businessId: string; month: string },
   GenerateDiagnosisResult
 >("generateDiagnosis");
+
+export interface AdminUserRow {
+  uid: string;
+  email: string;
+  businessName: string;
+  plan: "emprendedor" | "essential" | "pro" | "premium";
+  state: "gratis" | "pago" | "prueba" | "vencido";
+  expiresMs: number | null;
+  daysLeft: number | null;
+  createdMs: number | null;
+}
+
+export interface AdminOverview {
+  summary: {
+    total: number;
+    gratis: number;
+    proPago: number;
+    proPrueba: number;
+    essentialPago: number;
+    premiumPago: number;
+    premiumPrueba: number;
+    vencidos: number;
+    porVencer7: number;
+  };
+  users: AdminUserRow[];
+  truncated: boolean;
+}
+
+export const adminOverview = callable<Record<string, never>, AdminOverview>("adminOverview");

@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuthUser } from "@/lib/auth";
 import { useUserProfile } from "@/lib/userProfile";
 import { startPlanUpgrade } from "@/lib/payments";
-import { startTrial } from "@/lib/businessApi";
+import { freePlanAccess, startTrial } from "@/lib/businessApi";
 import { AppHeader } from "@/components/AppHeader";
-import { PLAN_LIMITS } from "@/types/pinak";
+import { PLAN_LIMITS, PLAN_NAMES } from "@/types/pinak";
 
 const currency = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -14,7 +14,15 @@ const currency = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-const PLAN_FEATURES: Record<"pro" | "premium", string[]> = {
+type PayPlan = "essential" | "pro" | "premium";
+const ORDER = { emprendedor: 0, essential: 1, pro: 2, premium: 3 } as const;
+
+const PLAN_FEATURES: Record<PayPlan, string[]> = {
+  essential: [
+    "Pensado para tu cuenta personal",
+    "Registra tus ingresos y gastos por voz y texto con IA",
+    "Reportes exportables a PDF y Excel",
+  ],
   pro: [
     "Registro por voz y texto con IA, sin límite",
     "2 usuarios en tu negocio (tú y una persona más)",
@@ -25,6 +33,8 @@ const PLAN_FEATURES: Record<"pro" | "premium", string[]> = {
     "Usuarios ilimitados en cada negocio",
     "Varios negocios en una sola cuenta",
     "Diagnóstico financiero mensual con IA",
+    "Recibos de venta en PDF, clientes y catálogo",
+    "Agenda de citas con cobro",
     "Modo privacidad en pantalla",
     "Soporte prioritario",
   ],
@@ -33,11 +43,11 @@ const PLAN_FEATURES: Record<"pro" | "premium", string[]> = {
 export default function UpgradePage() {
   const { user } = useAuthUser();
   const { profile } = useUserProfile(user?.uid);
-  const [loadingPlan, setLoadingPlan] = useState<"pro" | "premium" | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState<PayPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [trialMsg, setTrialMsg] = useState<string | null>(null);
 
-  async function handleUpgrade(plan: "pro" | "premium") {
+  async function handleUpgrade(plan: PayPlan) {
     setError(null);
     setLoadingPlan(plan);
     try {
@@ -48,12 +58,12 @@ export default function UpgradePage() {
     }
   }
 
-  async function handleTrial(plan: "pro" | "premium") {
+  async function handleTrial(plan: PayPlan) {
     setError(null);
     setLoadingPlan(plan);
     try {
       await startTrial({ plan });
-      setTrialMsg(`¡Listo! Tienes 15 días de ${plan === "pro" ? "Pro" : "Premium"} gratis.`);
+      setTrialMsg(`¡Listo! Tienes 10 días de ${PLAN_NAMES[plan]} gratis.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo activar la prueba.");
     } finally {
@@ -61,11 +71,33 @@ export default function UpgradePage() {
     }
   }
 
-  function canTrial(plan: "pro" | "premium") {
+  function canTrial(plan: PayPlan) {
     if (!profile || profile.trialsUsed[plan]) return false;
     if (profile.plan === plan) return false;
     if (profile.plan === "emprendedor") return true;
-    return profile.planTrial && profile.plan === "pro" && plan === "premium";
+    return profile.planTrial && ORDER[profile.plan] < ORDER[plan];
+  }
+
+  const [testAccess, setTestAccess] = useState(false);
+  const [switching, setSwitching] = useState<string | null>(null);
+
+  // Cuentas de pruebas (correos autorizados en el servidor): pueden cambiar de plan sin pagar.
+  useEffect(() => {
+    if (!user) return;
+    freePlanAccess({}).then((r) => setTestAccess(r.enabled === true)).catch(() => setTestAccess(false));
+  }, [user]);
+
+  async function switchPlan(plan: "emprendedor" | "essential" | "pro" | "premium") {
+    setError(null);
+    setSwitching(plan);
+    try {
+      await freePlanAccess({ plan });
+      setTrialMsg(`Listo, ahora estás en ${plan === "emprendedor" ? "Emprendedor (gratis)" : PLAN_NAMES[plan]}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo cambiar el plan.");
+    } finally {
+      setSwitching(null);
+    }
   }
 
   if (!user) return null;
@@ -79,6 +111,7 @@ export default function UpgradePage() {
           Tu plan actual:{" "}
           <span className="font-semibold text-navy-900">
             {profile?.plan === "emprendedor" && "Emprendedor (gratis)"}
+            {profile?.plan === "essential" && "Essential"}
             {profile?.plan === "pro" && "Pro"}
             {profile?.plan === "premium" && "Premium"}
           </span>
@@ -102,8 +135,27 @@ export default function UpgradePage() {
           </p>
         )}
 
-        <div className="mt-6 flex flex-col gap-4 md:grid md:grid-cols-2 md:items-start">
-          {(["pro", "premium"] as const).map((plan) => {
+        {testAccess && (
+          <section className="mt-4 rounded-2xl border border-dashed border-green-500 bg-white p-4">
+            <p className="text-sm font-semibold text-navy-900">Cuenta de pruebas</p>
+            <p className="mt-0.5 text-xs text-ink-soft">Cambia de plan sin pagar para probar cada uno.</p>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {(["emprendedor", "essential", "pro", "premium"] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => void switchPlan(p)}
+                  disabled={switching !== null || profile?.plan === p}
+                  className="rounded-lg border border-line px-3 py-2 text-xs font-semibold text-navy-900 transition hover:bg-cream disabled:opacity-50"
+                >
+                  {profile?.plan === p ? "✓ " : ""}{p === "emprendedor" ? "Gratis" : PLAN_NAMES[p]}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <div className="mt-6 flex flex-col gap-4 md:grid md:grid-cols-3 md:items-start">
+          {(["essential", "pro", "premium"] as const).map((plan) => {
             const isCurrent = profile?.plan === plan;
             return (
               <div
@@ -118,7 +170,7 @@ export default function UpgradePage() {
                       plan === "premium" ? "text-white" : "text-navy-900"
                     }`}
                   >
-                    {plan === "pro" ? "Pro" : "Premium"}
+                    {PLAN_NAMES[plan]}
                   </h2>
                   <span
                     className={`text-sm font-semibold ${
@@ -156,7 +208,7 @@ export default function UpgradePage() {
                     ? "Tu plan actual"
                     : loadingPlan === plan
                     ? "Redirigiendo a pago..."
-                    : `${profile?.planTrial && isCurrent ? "Pagar" : "Actualizar a"} ${plan === "pro" ? "Pro" : "Premium"}`}
+                    : `${profile?.planTrial && isCurrent ? "Pagar" : "Actualizar a"} ${PLAN_NAMES[plan]}`}
                 </button>
                 {canTrial(plan) && (
                   <button
@@ -168,7 +220,7 @@ export default function UpgradePage() {
                         : "border-line text-navy-900 hover:bg-cream"
                     }`}
                   >
-                    Probar 15 días gratis
+                    Probar 10 días gratis
                   </button>
                 )}
               </div>

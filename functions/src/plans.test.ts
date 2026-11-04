@@ -4,9 +4,12 @@ import {
   expiryDecision,
   inviteDecision,
   paymentDecision,
+  normalizePlan,
   planTrim,
+  PLAN_LIMITS,
   trialDecision,
   PAID_PLAN_DAYS,
+  TRIAL_DAYS,
   type PaymentState,
 } from "./plans";
 
@@ -103,3 +106,34 @@ describe("límites de plan", () => {
     ).toBe("already-exists");
   });
 });
+
+describe("plan Essential", () => {
+  it("tiene IA y exportar, pero un solo usuario y un negocio", () => {
+    expect(PLAN_LIMITS.essential).toMatchObject({ users: 1, businesses: 1, ai: true, exports: true, diagnosis: false });
+    expect(normalizePlan("essential")).toBe("essential");
+  });
+  it("al pagarlo desde gratis empieza ahora por 30 días", () => {
+    const free: PaymentState = { plan: "emprendedor", trial: false, expiresMs: null, pending: null };
+    expect(paymentDecision({ nowMs: NOW, state: free, paid: "essential" })).toMatchObject({ plan: "essential", expiresMs: NOW + 30 * DAY, appliedNow: true });
+  });
+  it("pagar Essential con Pro vigente no baja de plan: queda como crédito", () => {
+    const state: PaymentState = { plan: "pro", trial: false, expiresMs: NOW + 10 * DAY, pending: null };
+    const r = paymentDecision({ nowMs: NOW, state, paid: "essential" });
+    expect(r.plan).toBe("pro");
+    expect(r.pending).toEqual({ plan: "essential", startMs: NOW + 10 * DAY, days: 30 });
+  });
+  it("pagar Pro con Essential vigente sube ya", () => {
+    const state: PaymentState = { plan: "essential", trial: false, expiresMs: NOW + 10 * DAY, pending: null };
+    expect(paymentDecision({ nowMs: NOW, state, paid: "pro" })).toMatchObject({ plan: "pro", appliedNow: true });
+  });
+  it("tiene prueba gratuita, una sola vez, y dura 10 días", () => {
+    expect(TRIAL_DAYS).toBe(10);
+    expect(trialDecision({ target: "essential", currentPlan: "emprendedor", currentIsTrial: false, trialsUsed: {} })).toBeNull();
+    expect(trialDecision({ target: "essential", currentPlan: "emprendedor", currentIsTrial: false, trialsUsed: { essential: true } })?.code).toBe("already-exists");
+  });
+  it("desde una prueba de Essential se puede probar Pro, pero no al revés", () => {
+    expect(trialDecision({ target: "pro", currentPlan: "essential", currentIsTrial: true, trialsUsed: {} })).toBeNull();
+    expect(trialDecision({ target: "essential", currentPlan: "pro", currentIsTrial: true, trialsUsed: {} })?.code).toBe("failed-precondition");
+  });
+});
+

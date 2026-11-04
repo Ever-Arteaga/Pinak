@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
+import * as functionsV1 from "firebase-functions/v1";
 import { ENFORCE_APP_CHECK } from "./options";
 import { isDeleteConfirmed, isRecentLogin } from "./accountRules";
 
@@ -16,7 +17,7 @@ const FieldValue = admin.firestore.FieldValue;
  * de pagos en la app y por último su usuario de acceso. Es idempotente: si algo falla a
  * medias, repetirlo termina el trabajo (el usuario de acceso se borra al final).
  */
-async function deleteAccountData(uid: string, email: string) {
+export async function deleteAccountData(uid: string, email: string) {
   // 1. Negocios propios. Se marcan antes como "deleting" para que el trigger de resúmenes
   //    no vuelva a crear documentos mientras se borran los movimientos.
   const owned = await db.collection("businesses").where("ownerId", "==", uid).get();
@@ -86,3 +87,21 @@ export const deleteAccount = onCall(
     return { ok: true };
   }
 );
+
+/**
+ * Cuando alguien borra un usuario de Firebase Authentication (por ejemplo desde la consola),
+ * se borra también todo lo suyo en la base de datos, y deja de aparecer en el panel de admin.
+ * (Los disparadores de Authentication solo existen en la 1.ª generación de funciones.)
+ */
+export const onAuthUserDeleted = functionsV1
+  .runWith({ timeoutSeconds: 300, memory: "512MB" })
+  .auth.user()
+  .onDelete(async (user) => {
+    const email = (user.email ?? "").trim().toLowerCase();
+    try {
+      await deleteAccountData(user.uid, email);
+      logger.info("Datos borrados tras eliminar el usuario de Authentication", { uid: user.uid });
+    } catch (err) {
+      logger.error("No se pudieron borrar los datos del usuario eliminado", { uid: user.uid, err });
+    }
+  });

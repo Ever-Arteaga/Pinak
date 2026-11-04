@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View } from "react-native";
 import { useAuthUser } from "./src/lib/auth";
 import { BusinessProvider } from "./src/lib/business";
+import { BottomNav } from "./src/components/BottomNav";
 import { MenuDrawer } from "./src/components/MenuDrawer";
 import { Spinner } from "./src/components/ui";
 import { NavContext, type Screen } from "./src/nav";
@@ -22,7 +23,20 @@ function Root() {
   const { mode } = useTheme();
   const [screen, setScreen] = useState<Screen>("dashboard");
   const [menu, setMenu] = useState(false);
-  const nav = useMemo(() => ({ screen, go: setScreen, openMenu: () => setMenu(true) }), [screen]);
+  const [addSignal, setAddSignal] = useState(0);
+  const nav = useMemo(
+    () => ({
+      screen,
+      go: setScreen,
+      openMenu: () => setMenu(true),
+      requestAdd: () => {
+        setScreen("dashboard");
+        setAddSignal((n) => n + 1);
+      },
+      addSignal,
+    }),
+    [screen, addSignal]
+  );
   const back = () => setScreen("dashboard");
   const bar = mode === "dark" ? "light" : "dark";
 
@@ -62,6 +76,7 @@ function Root() {
           {screen === "team" && <TeamScreen onBack={back} />}
           {screen === "businesses" && <BusinessesScreen onBack={back} />}
           {screen === "diagnosis" && <DiagnosisScreen onBack={back} />}
+          {(screen === "dashboard" || screen === "receivables" || screen === "reports") && <BottomNav />}
           <MenuDrawer open={menu} onClose={() => setMenu(false)} current={screen} onGo={(s) => { setScreen(s); setMenu(false); }} />
           <StatusBar style={bar} />
         </View>

@@ -5,6 +5,7 @@ import { addReceivable, deleteReceivable, updateReceivable } from "@/lib/receiva
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MoneyInput } from "@/components/MoneyInput";
 import { MAX_AMOUNT } from "@/lib/money";
+import { usePersonal } from "@/lib/personal";
 import type { Receivable } from "@/types/pinak";
 
 export function AddReceivableModal({
@@ -18,6 +19,8 @@ export function AddReceivableModal({
 }) {
   const isEditing = Boolean(editingReceivable);
 
+  const personal = usePersonal();
+  const who = personal ? "la persona" : "el cliente";
   const [clientName, setClientName] = useState(editingReceivable?.clientName ?? "");
   const [clientPhone, setClientPhone] = useState(editingReceivable?.clientPhone ?? "");
   const [amount, setAmount] = useState(
@@ -35,7 +38,7 @@ export function AddReceivableModal({
     const name = clientName.trim();
     const numericAmount = Number(amount);
     if (name.length < 2) {
-      setError("Escribe el nombre del cliente.");
+      setError(`Escribe el nombre de ${who}.`);
       return;
     }
     const phoneDigits = clientPhone.replace(/\D/g, "");
@@ -116,7 +119,7 @@ export function AddReceivableModal({
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium text-ink">
-              Nombre del cliente
+              Nombre de {who}
             </label>
             <input
               type="text"
@@ -130,7 +133,7 @@ export function AddReceivableModal({
 
           <div>
             <label className="mb-1 block text-sm font-medium text-ink">
-              WhatsApp del cliente (opcional)
+              WhatsApp de {who} (opcional)
             </label>
             <input
               type="tel"

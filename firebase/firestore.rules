@@ -16,6 +16,17 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/businesses/$(businessId)).data;
     }
 
+    // Identifica la resolución de numeración vigente del negocio (cambia al pedir una nueva).
+    function invoiceKey(businessId) {
+      return businessData(businessId).billing.prefix + '|' + businessData(businessId).billing.resolutionNumber;
+    }
+
+    // El plan Premium incluye recibos, clientes y catálogo. Si el negocio baja de plan,
+    // lo ya creado se puede leer, pero no crear ni editar más.
+    function isPremium(businessId) {
+      return businessData(businessId).get('plan', 'emprendedor') == 'premium';
+    }
+
     // Puede trabajar con los datos de un negocio quien es miembro Y el negocio
     // no está bloqueado por vencimiento del plan de su dueño.
     function canAccess(businessId) {
@@ -44,7 +55,7 @@ service cloud.firestore {
         && (!('privacyModeEnabled' in request.resource.data) || request.resource.data.privacyModeEnabled is bool);
       allow update: if isOwner(userId)
         && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['businessName', 'businessType', 'phone', 'city', 'nit', 'description', 'privacyModeEnabled']);
+            .hasOnly(['businessName', 'businessType', 'phone', 'city', 'nit', 'description', 'photoURL', 'privacyModeEnabled']);
       allow delete: if false;
 
       // PAYMENTS - historial de pagos de Bold.
@@ -68,7 +79,24 @@ service cloud.firestore {
       allow update: if isSignedIn()
         && resource.data.ownerId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['name', 'businessType', 'phone', 'city', 'nit', 'description'])
+            .hasOnly(['name', 'businessType', 'phone', 'city', 'nit', 'description', 'photoURL', 'usesAppointments', 'billing'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['billing'])
+            || (resource.data.get('plan', 'emprendedor') == 'premium'
+                && request.resource.data.billing is map
+                && request.resource.data.billing.keys().hasOnly(['mode', 'taxStatus', 'taxNote', 'resolutionNumber', 'resolutionDate', 'prefix', 'rangeFrom', 'rangeTo', 'validUntil'])
+                && request.resource.data.billing.mode in ['recibo', 'factura']
+                && request.resource.data.billing.taxStatus in ['no_responsable', 'responsable_iva', 'simple']
+                && request.resource.data.billing.prefix is string
+                && request.resource.data.billing.prefix.size() <= 4
+                && request.resource.data.billing.rangeFrom is int
+                && request.resource.data.billing.rangeTo is int
+                && request.resource.data.billing.rangeFrom >= 1
+                && request.resource.data.billing.rangeTo >= request.resource.data.billing.rangeFrom))
+        && (!('usesAppointments' in request.resource.data) || request.resource.data.usesAppointments is bool)
+        && (!('photoURL' in request.resource.data) || request.resource.data.photoURL == null
+            || (request.resource.data.photoURL is string
+                && request.resource.data.photoURL.size() <= 80000
+                && request.resource.data.photoURL.matches('^data:image/jpeg;base64,.*')))
         && request.resource.data.name is string
         && request.resource.data.name.size() >= 2
         && request.resource.data.name.size() <= 80;
@@ -107,6 +135,189 @@ service cloud.firestore {
           && (!('description' in request.resource.data) || request.resource.data.description == null
               || (request.resource.data.description is string && request.resource.data.description.size() <= 200));
         allow delete: if canAccess(businessId);
+      }
+
+      // CLIENTES del negocio (se guardan al hacer un recibo, sin necesidad de fiado)
+      match /customers/{customerId} {
+        allow read, delete: if canAccess(businessId);
+        allow create: if canAccess(businessId) && isPremium(businessId)
+          && request.resource.data.keys().hasAll(['name', 'createdAt', 'createdBy'])
+          && request.resource.data.keys().hasOnly(['name', 'phone', 'email', 'document', 'address', 'notes', 'createdAt', 'createdBy'])
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 80
+          && (!('phone' in request.resource.data) || (request.resource.data.phone is string && request.resource.data.phone.size() <= 20))
+          && (!('email' in request.resource.data) || (request.resource.data.email is string && request.resource.data.email.size() <= 80))
+          && (!('document' in request.resource.data) || (request.resource.data.document is string && request.resource.data.document.size() <= 30))
+          && (!('address' in request.resource.data) || (request.resource.data.address is string && request.resource.data.address.size() <= 120))
+          && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 300));
+        allow update: if canAccess(businessId) && isPremium(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['name', 'phone', 'email', 'document', 'address', 'notes'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 80
+          && (!('phone' in request.resource.data) || (request.resource.data.phone is string && request.resource.data.phone.size() <= 20))
+          && (!('email' in request.resource.data) || (request.resource.data.email is string && request.resource.data.email.size() <= 80))
+          && (!('document' in request.resource.data) || (request.resource.data.document is string && request.resource.data.document.size() <= 30))
+          && (!('address' in request.resource.data) || (request.resource.data.address is string && request.resource.data.address.size() <= 120))
+          && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 300));
+      }
+
+      // CATÁLOGO de productos y servicios del negocio
+      match /products/{productId} {
+        allow read, delete: if canAccess(businessId);
+        allow create: if canAccess(businessId) && isPremium(businessId)
+          && request.resource.data.keys().hasAll(['name', 'price', 'kind', 'createdAt', 'createdBy'])
+          && request.resource.data.keys().hasOnly(['name', 'price', 'kind', 'createdAt', 'createdBy'])
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 80
+          && request.resource.data.price is number
+          && request.resource.data.price >= 0 && request.resource.data.price <= 1000000000
+          && request.resource.data.kind in ['producto', 'servicio'];
+        allow update: if canAccess(businessId) && isPremium(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'price', 'kind'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 80
+          && request.resource.data.price is number
+          && request.resource.data.price >= 0 && request.resource.data.price <= 1000000000
+          && request.resource.data.kind in ['producto', 'servicio'];
+      }
+
+      // CONSECUTIVOS. Recibos: sube de uno en uno. Facturas: sube de uno en uno dentro de la
+      // resolución de numeración vigente (prefijo + número de resolución); al cambiar de
+      // resolución arranca en el inicio del nuevo rango y nunca pasa del final.
+      match /meta/{docId} {
+        allow read: if canAccess(businessId);
+        allow create: if canAccess(businessId) && isPremium(businessId)
+          && docId == 'counters'
+          && request.resource.data.keys().hasOnly(['receipt', 'invoice', 'invoiceKey', 'quote'])
+          && (!('receipt' in request.resource.data) || request.resource.data.receipt == 1)
+          && (!('quote' in request.resource.data) || request.resource.data.quote == 1)
+          && (!('invoice' in request.resource.data) || (
+                request.resource.data.invoiceKey == invoiceKey(businessId)
+                && request.resource.data.invoice == businessData(businessId).billing.rangeFrom));
+        allow update: if canAccess(businessId) && isPremium(businessId)
+          && docId == 'counters'
+          && request.resource.data.keys().hasOnly(['receipt', 'invoice', 'invoiceKey', 'quote'])
+          && (!('receipt' in request.resource.data)
+              || ('receipt' in resource.data
+                  ? (request.resource.data.receipt == resource.data.receipt
+                     || request.resource.data.receipt == resource.data.receipt + 1)
+                  : request.resource.data.receipt == 1))
+          && (!('quote' in request.resource.data)
+              || ('quote' in resource.data
+                  ? (request.resource.data.quote == resource.data.quote
+                     || request.resource.data.quote == resource.data.quote + 1)
+                  : request.resource.data.quote == 1))
+          && (!('invoice' in request.resource.data) || (
+                request.resource.data.invoiceKey == invoiceKey(businessId)
+                && request.resource.data.invoice <= businessData(businessId).billing.rangeTo
+                && (('invoiceKey' in resource.data && resource.data.invoiceKey == invoiceKey(businessId))
+                    ? (request.resource.data.invoice == resource.data.invoice
+                       || request.resource.data.invoice == resource.data.invoice + 1)
+                    : request.resource.data.invoice == businessData(businessId).billing.rangeFrom)));
+      }
+
+      // RECIBOS de venta: comprobantes numerados. Se crean y se leen; no se editan ni se borran.
+      match /receipts/{receiptId} {
+        allow read: if canAccess(businessId);
+        allow create: if canAccess(businessId) && isPremium(businessId)
+          && request.resource.data.keys().hasAll(['number', 'items', 'total', 'method', 'status', 'date', 'createdAt', 'createdBy'])
+          && request.resource.data.keys().hasOnly(['number', 'customerId', 'customerName', 'customerPhone', 'customerDocument', 'items', 'total', 'method', 'status', 'notes', 'date', 'createdAt', 'createdBy', 'transactionId', 'receivableId', 'docType', 'prefix', 'subtotal', 'ivaTotal', 'dueDate', 'fiscal'])
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.date is timestamp
+          && request.resource.data['number'] is int && request.resource.data['number'] >= 1
+          && request.resource.data.items is list
+          && request.resource.data.items.size() >= 1 && request.resource.data.items.size() <= 50
+          && request.resource.data.total is number
+          && request.resource.data.total > 0 && request.resource.data.total <= 1000000000
+          && request.resource.data.method in ['efectivo', 'nequi', 'daviplata', 'tarjeta', 'transferencia']
+          && request.resource.data.status in ['pagado', 'pendiente']
+          && (!('customerName' in request.resource.data) || (request.resource.data.customerName is string && request.resource.data.customerName.size() <= 80))
+          && (!('customerPhone' in request.resource.data) || (request.resource.data.customerPhone is string && request.resource.data.customerPhone.size() <= 20))
+          && (!('customerDocument' in request.resource.data) || (request.resource.data.customerDocument is string && request.resource.data.customerDocument.size() <= 30))
+          && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 300))
+          && (!('docType' in request.resource.data) || request.resource.data.docType in ['recibo', 'factura'])
+          && (!('prefix' in request.resource.data) || (request.resource.data.prefix is string && request.resource.data.prefix.size() <= 4))
+          && (!('subtotal' in request.resource.data) || request.resource.data.subtotal is number)
+          && (!('ivaTotal' in request.resource.data) || request.resource.data.ivaTotal is number)
+          && (!('dueDate' in request.resource.data) || request.resource.data.dueDate == null || request.resource.data.dueDate is timestamp)
+          && (!('fiscal' in request.resource.data) || request.resource.data.fiscal is map);
+        allow update: if false;
+        // Los recibos internos se pueden eliminar; las facturas no (su consecutivo es fiscal).
+        allow delete: if canAccess(businessId) && isPremium(businessId)
+          && resource.data.get('docType', 'recibo') != 'factura';
+      }
+
+      // COTIZACIONES (Premium): propuestas numeradas. Se crean, se cambia su estado y se pueden eliminar.
+      match /quotes/{quoteId} {
+        allow read: if canAccess(businessId);
+        allow create: if canAccess(businessId) && isPremium(businessId)
+          && request.resource.data.keys().hasAll(['number', 'items', 'total', 'status', 'validUntil', 'date', 'createdAt', 'createdBy'])
+          && request.resource.data.keys().hasOnly(['number', 'customerId', 'customerName', 'customerPhone', 'customerDocument', 'items', 'total', 'status', 'validUntil', 'notes', 'date', 'createdAt', 'createdBy', 'receiptId'])
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.status == 'pendiente'
+          && request.resource.data.date is timestamp
+          && request.resource.data.validUntil is timestamp
+          && request.resource.data['number'] is int && request.resource.data['number'] >= 1
+          && request.resource.data.items is list
+          && request.resource.data.items.size() >= 1 && request.resource.data.items.size() <= 50
+          && request.resource.data.total is number
+          && request.resource.data.total > 0 && request.resource.data.total <= 1000000000
+          && (!('customerName' in request.resource.data) || (request.resource.data.customerName is string && request.resource.data.customerName.size() <= 80))
+          && (!('customerPhone' in request.resource.data) || (request.resource.data.customerPhone is string && request.resource.data.customerPhone.size() <= 20))
+          && (!('customerDocument' in request.resource.data) || (request.resource.data.customerDocument is string && request.resource.data.customerDocument.size() <= 30))
+          && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 300));
+        // Solo cambia el estado (y el recibo con el que se cerró); lo demás no se edita.
+        allow update: if canAccess(businessId) && isPremium(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'receiptId'])
+          && request.resource.data.status in ['pendiente', 'aceptada', 'rechazada']
+          && (!('receiptId' in request.resource.data) || request.resource.data.receiptId is string);
+        allow delete: if canAccess(businessId) && isPremium(businessId);
+      }
+
+      // AGENDA de citas (Premium). Se agenda, se atiende (cobrando con un recibo) o se cancela.
+      match /appointments/{appointmentId} {
+        allow read, delete: if canAccess(businessId);
+        allow create: if canAccess(businessId) && isPremium(businessId)
+          && request.resource.data.keys().hasAll(['customerName', 'serviceName', 'price', 'start', 'durationMin', 'status', 'paid', 'createdAt', 'createdBy'])
+          && request.resource.data.keys().hasOnly(['customerId', 'customerName', 'customerPhone', 'serviceName', 'price', 'start', 'durationMin', 'status', 'paid', 'receiptId', 'notes', 'createdAt', 'createdBy'])
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.status == 'agendada'
+          && request.resource.data.paid == false
+          && request.resource.data.start is timestamp
+          && request.resource.data.customerName is string
+          && request.resource.data.customerName.size() >= 2 && request.resource.data.customerName.size() <= 80
+          && request.resource.data.serviceName is string
+          && request.resource.data.serviceName.size() >= 1 && request.resource.data.serviceName.size() <= 80
+          && request.resource.data.price is number
+          && request.resource.data.price >= 0 && request.resource.data.price <= 1000000000
+          && request.resource.data.durationMin is int
+          && request.resource.data.durationMin >= 5 && request.resource.data.durationMin <= 720
+          && (!('customerPhone' in request.resource.data) || (request.resource.data.customerPhone is string && request.resource.data.customerPhone.size() <= 20))
+          && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 300));
+        allow update: if canAccess(businessId) && isPremium(businessId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['customerName', 'customerPhone', 'serviceName', 'price', 'start', 'durationMin', 'status', 'paid', 'receiptId', 'notes'])
+          && request.resource.data.status in ['agendada', 'atendida', 'cancelada']
+          && request.resource.data.paid is bool
+          && request.resource.data.start is timestamp
+          && request.resource.data.customerName is string
+          && request.resource.data.customerName.size() >= 2 && request.resource.data.customerName.size() <= 80
+          && request.resource.data.serviceName is string
+          && request.resource.data.serviceName.size() >= 1 && request.resource.data.serviceName.size() <= 80
+          && request.resource.data.price is number
+          && request.resource.data.price >= 0 && request.resource.data.price <= 1000000000
+          && request.resource.data.durationMin is int
+          && request.resource.data.durationMin >= 5 && request.resource.data.durationMin <= 720
+          && (!('customerPhone' in request.resource.data) || (request.resource.data.customerPhone is string && request.resource.data.customerPhone.size() <= 20))
+          && (!('notes' in request.resource.data) || (request.resource.data.notes is string && request.resource.data.notes.size() <= 300));
       }
 
       match /categories/{categoryId} {

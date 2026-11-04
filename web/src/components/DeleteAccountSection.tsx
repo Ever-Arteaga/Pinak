@@ -4,10 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { logoutUser, reauthenticate, reauthMethod, useAuthUser } from "@/lib/auth";
 import { deleteAccount } from "@/lib/businessApi";
+import { usePersonal } from "@/lib/personal";
 
 /** Zona de peligro de Mi perfil: elimina la cuenta y todos sus datos (doble confirmación). */
 export function DeleteAccountSection() {
   const router = useRouter();
+  const personal = usePersonal();
   const { user } = useAuthUser();
   const [open, setOpen] = useState(false);
   const [phrase, setPhrase] = useState("");
@@ -45,8 +47,9 @@ export function DeleteAccountSection() {
     <section className="mt-4 rounded-2xl border border-red-200 bg-white p-5">
       <h2 className="font-display text-sm font-semibold text-danger">Eliminar cuenta</h2>
       <p className="mt-1 text-xs text-ink-soft">
-        Borra para siempre tu cuenta y tus negocios, con sus movimientos, fiados y categorías. Las
-        personas de tu equipo perderán el acceso. No se puede deshacer y no hay reembolso del plan.
+        {personal
+          ? "Borra para siempre tu cuenta con todos tus movimientos, fiados y categorías. No se puede deshacer y no hay reembolso del plan."
+          : "Borra para siempre tu cuenta y tus negocios, con sus movimientos, fiados y categorías. Las personas de tu equipo perderán el acceso. No se puede deshacer y no hay reembolso del plan."}
       </p>
       {!open ? (
         <button

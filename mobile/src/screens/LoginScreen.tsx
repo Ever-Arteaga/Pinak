@@ -98,8 +98,8 @@ export default function LoginScreen() {
               ? "Ingresa a tu negocio en piloto automático."
               : mode === "reset"
               ? "Te enviaremos un enlace a tu correo para crear una nueva."
-              : chosenPlan === "pro" || chosenPlan === "premium"
-              ? `Elegiste el plan ${chosenPlan === "pro" ? "Pro" : "Premium"}: crea tu cuenta y actívalo desde Planes.`
+              : chosenPlan === "essential" || chosenPlan === "pro" || chosenPlan === "premium"
+              ? `Elegiste el plan ${chosenPlan === "essential" ? "Essential" : chosenPlan === "pro" ? "Pro" : "Premium"}: crea tu cuenta y actívalo desde Planes.`
               : "Empieza gratis, sin tarjeta de crédito."}
           </Text>
 

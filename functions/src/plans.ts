@@ -6,7 +6,9 @@
  * Las personas invitadas heredan esos beneficios dentro de ese negocio.
  */
 
-export type Plan = "emprendedor" | "pro" | "premium";
+export type Plan = "emprendedor" | "essential" | "pro" | "premium";
+/** Planes que se pagan (todos menos el gratuito). */
+export type PaidPlan = Exclude<Plan, "emprendedor">;
 
 export interface PlanLimits {
   /** Usuarios por negocio, incluyendo al dueño. null = ilimitado. */
@@ -20,21 +22,23 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
   emprendedor: { users: 1, businesses: 1, ai: false, exports: false, diagnosis: false },
+  essential: { users: 1, businesses: 1, ai: true, exports: true, diagnosis: false },
   pro: { users: 2, businesses: 1, ai: true, exports: true, diagnosis: false },
   premium: { users: null, businesses: null, ai: true, exports: true, diagnosis: true },
 };
 
 /** Tope diario de registros con IA por negocio (protege el costo de Gemini). */
-export const AI_DAILY_CAP: Record<Plan, number> = { emprendedor: 0, pro: 200, premium: 500 };
+export const AI_DAILY_CAP: Record<Plan, number> = { emprendedor: 0, essential: 200, pro: 200, premium: 500 };
 
 export const PLAN_NAMES: Record<Plan, string> = {
   emprendedor: "Emprendedor",
+  essential: "Essential",
   pro: "Pro",
   premium: "Premium",
 };
 
 export function normalizePlan(value: unknown): Plan {
-  return value === "pro" || value === "premium" ? value : "emprendedor";
+  return value === "essential" || value === "pro" || value === "premium" ? value : "emprendedor";
 }
 
 export function limitReached(limit: number | null, current: number): boolean {
@@ -235,9 +239,9 @@ export function planTrim(businesses: OwnedBusinessInfo[], plan: Plan): TrimResul
 }
 
 // ---------------------------------------------------------------------------
-// Prueba gratuita de 15 días (una vez por plan y por cuenta)
+// Prueba gratuita de 10 días (una vez por plan y por cuenta)
 // ---------------------------------------------------------------------------
-export const TRIAL_DAYS = 15;
+export const TRIAL_DAYS = 10;
 
 export function trialDecision(input: {
   target: unknown;
@@ -245,7 +249,7 @@ export function trialDecision(input: {
   currentIsTrial: boolean;
   trialsUsed: Partial<Record<Plan, boolean>>;
 }): Refusal | null {
-  if (input.target !== "pro" && input.target !== "premium") {
+  if (input.target !== "essential" && input.target !== "pro" && input.target !== "premium") {
     return { code: "invalid-argument", message: "Plan no válido para la prueba gratuita." };
   }
   const target: Plan = input.target;
@@ -258,7 +262,7 @@ export function trialDecision(input: {
   if (input.currentPlan !== "emprendedor" && !input.currentIsTrial) {
     return { code: "failed-precondition", message: "Ya tienes un plan de pago activo." };
   }
-  if (input.currentPlan === "premium") {
+  if (input.currentPlan !== "emprendedor" && PLAN_RANK[input.currentPlan] >= PLAN_RANK[target]) {
     return { code: "failed-precondition", message: "Ya estás probando un plan superior." };
   }
   return null;
@@ -267,12 +271,12 @@ export function trialDecision(input: {
 // ---------------------------------------------------------------------------
 // Pagos: qué pasa con el plan del usuario cuando Bold aprueba una venta
 // ---------------------------------------------------------------------------
-export const PLAN_RANK: Record<Plan, number> = { emprendedor: 0, pro: 1, premium: 2 };
+export const PLAN_RANK: Record<Plan, number> = { emprendedor: 0, essential: 1, pro: 2, premium: 3 };
 export const PAID_PLAN_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface PendingPlan {
-  plan: "pro" | "premium";
+  plan: PaidPlan;
   /** Cuándo empieza a regir (el vencimiento del plan superior vigente). */
   startMs: number;
   days: number;
@@ -294,7 +298,7 @@ export interface PaymentResult {
 }
 
 /** Plan de pago vigente (no prueba, no vencido), o null. */
-function activePaid(s: PaymentState, nowMs: number): { plan: "pro" | "premium"; expiresMs: number } | null {
+function activePaid(s: PaymentState, nowMs: number): { plan: PaidPlan; expiresMs: number } | null {
   if (s.plan === "emprendedor" || s.trial) return null;
   if (s.expiresMs === null || s.expiresMs <= nowMs) return null;
   return { plan: s.plan, expiresMs: s.expiresMs };
@@ -303,7 +307,7 @@ function activePaid(s: PaymentState, nowMs: number): { plan: "pro" | "premium"; 
 export function paymentDecision(input: {
   nowMs: number;
   state: PaymentState;
-  paid: "pro" | "premium";
+  paid: PaidPlan;
   days?: number;
 }): PaymentResult {
   const days = input.days ?? PAID_PLAN_DAYS;

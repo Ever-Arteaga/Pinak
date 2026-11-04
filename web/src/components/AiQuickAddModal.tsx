@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { addTransaction } from "@/lib/transactions";
 import { parseTransactionText, type AiParsedTransaction } from "@/lib/ai";
 import { useSpeechRecognition } from "@/lib/speech";
+import { usePersonal } from "@/lib/personal";
 import { MoneyInput } from "@/components/MoneyInput";
 
 const currency = new Intl.NumberFormat("es-CO", {
@@ -28,9 +29,22 @@ function MicIcon() {
   );
 }
 
-export function AiQuickAddModal({ businessId, onClose }: { businessId: string; onClose: () => void }) {
+export function AiQuickAddModal({
+  businessId,
+  onClose,
+  initialText = "",
+  initialVoice = false,
+}: {
+  businessId: string;
+  onClose: () => void;
+  /** Texto ya escrito (por ejemplo desde la barra del dashboard): se analiza apenas abre. */
+  initialText?: string;
+  /** Si el texto inicial fue dictado con voz (para marcar los movimientos como "IA voz"). */
+  initialVoice?: boolean;
+}) {
   const [step, setStep] = useState<Step>("input");
-  const [text, setText] = useState("");
+  const personal = usePersonal();
+  const [text, setText] = useState(initialText);
   const [candidates, setCandidates] = useState<AiParsedTransaction[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [usageInfo, setUsageInfo] = useState<{ used: number; limit: number | null } | null>(null);
@@ -40,7 +54,7 @@ export function AiQuickAddModal({ businessId, onClose }: { businessId: string; o
 
   // Voz: el texto dictado se agrega al que ya estaba escrito.
   const baseTextRef = useRef("");
-  const usedVoiceRef = useRef(false);
+  const usedVoiceRef = useRef(initialVoice);
 
   const handleTranscript = useCallback((finalText: string, interim: string) => {
     const dictado = [finalText, interim].filter(Boolean).join(" ");
@@ -66,15 +80,14 @@ export function AiQuickAddModal({ businessId, onClose }: { businessId: string; o
     startVoice();
   }
 
-  async function handleAnalyze(e: React.FormEvent) {
-    e.preventDefault();
-    if (!text.trim()) return;
+  async function analyze(raw: string) {
+    if (!raw.trim()) return;
     if (listening) stopVoice();
 
     setProcessing(true);
     setError(null);
     try {
-      const result = await parseTransactionText(text.trim(), businessId);
+      const result = await parseTransactionText(raw.trim(), businessId);
       if (result.transactions.length === 0) {
         setError(
           "No pude identificar ningún movimiento en ese mensaje. Intenta ser más específico (monto, si fue ingreso o gasto)."
@@ -91,6 +104,20 @@ export function AiQuickAddModal({ businessId, onClose }: { businessId: string; o
       setProcessing(false);
     }
   }
+
+  function handleAnalyze(e: React.FormEvent) {
+    e.preventDefault();
+    void analyze(text);
+  }
+
+  // Si llega con texto (desde la barra del dashboard), se analiza una sola vez al abrir.
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (autoRan.current || !initialText.trim()) return;
+    autoRan.current = true;
+    void analyze(initialText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleConfirm() {
     setSaving(true);
@@ -141,7 +168,7 @@ export function AiQuickAddModal({ businessId, onClose }: { businessId: string; o
             <p className="text-sm text-ink-soft">
               Cuéntame qué pasó escribiendo o hablando, como si le hablaras a un asistente. Por ejemplo:{" "}
               <span className="italic">
-                &ldquo;Vendí 60.000 en Nequi y gasté 15.000 en insumos en efectivo&rdquo;
+                {personal ? <>&ldquo;Me pagaron 1.200.000 de salario y gasté 80.000 en mercado con Nequi&rdquo;</> : <>&ldquo;Vendí 60.000 en Nequi y gasté 15.000 en insumos en efectivo&rdquo;</>}
               </span>
             </p>
             <textarea

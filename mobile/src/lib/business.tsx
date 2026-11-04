@@ -24,12 +24,13 @@ import { isAuthBootstrapping, useAuthUser } from "./auth";
 import { ensureBusiness } from "./businessApi";
 import { getItem, setItem } from "./storage";
 import { pickActiveBusiness, sortBusinesses } from "./businessSelect";
+import { parseBilling } from "@pinak/shared/billing";
 import type { Business, BusinessMember, Invitation, Plan } from "../types/pinak";
 
 const storageKey = (uid: string) => `pinak.activeBusiness.${uid}`;
 
 function normalizePlan(v: unknown): Plan {
-  return v === "pro" || v === "premium" ? v : "emprendedor";
+  return v === "essential" || v === "pro" || v === "premium" ? v : "emprendedor";
 }
 
 function parseBusiness(d: QueryDocumentSnapshot): Business {
@@ -55,6 +56,9 @@ function parseBusiness(d: QueryDocumentSnapshot): Business {
     city: x.city ?? "",
     nit: x.nit ?? "",
     description: x.description ?? "",
+    photoURL: typeof x.photoURL === "string" ? x.photoURL : "",
+    usesAppointments: typeof x.usesAppointments === "boolean" ? x.usesAppointments : undefined,
+    billing: parseBilling(x.billing),
     ownerId: x.ownerId ?? "",
     plan: normalizePlan(x.plan),
     locked: x.locked === true,
@@ -210,6 +214,27 @@ export async function updateBusinessProfile(
       }),
       updateProfile(current, { displayName: datos.name }),
     ]);
+  }
+}
+
+/** Cuestionario del negocio: tipo de negocio y si atiende con citas (solo el dueño). */
+export async function updateBusinessSetup(
+  businessId: string,
+  datos: { businessType: string; usesAppointments: boolean }
+) {
+  await updateDoc(doc(db, "businesses", businessId), { ...datos });
+  const current = auth.currentUser;
+  if (current && current.uid === businessId) {
+    await updateDoc(doc(db, "users", businessId), { businessType: datos.businessType }).catch(() => {});
+  }
+}
+
+/** Guarda (o quita con null) la foto del negocio. `photo` es un data URL JPEG ya reducido. */
+export async function updateBusinessPhoto(businessId: string, photo: string | null) {
+  await updateDoc(doc(db, "businesses", businessId), { photoURL: photo });
+  const current = auth.currentUser;
+  if (current && current.uid === businessId) {
+    await updateDoc(doc(db, "users", businessId), { photoURL: photo }).catch(() => {});
   }
 }
 
